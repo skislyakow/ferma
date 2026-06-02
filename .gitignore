@@ -1,0 +1,35 @@
+# Secrets
+.env
+!.env.example
+channels/*/.env
+anon.session
+
+# Runtime data
+*.db
+bot.log
+farm_pids.json
+bot.pid
+
+# Downloaded media (reproducible)
+channels/*/media/
+media/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local scripts (not part of the farm)
+start_bot.ps1
