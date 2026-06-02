@@ -26,6 +26,27 @@ class PostFilter:
         "все подробности на", "все подробности в",
         "дайджест", "самые яркие", "пересылаемые посты",
         "листайте, если", "за неделю",
+        "читайте полностью", "читать полностью",
+        "продолжение читайте", "продолжение в",
+        "смотрите на сайте", "узнайте на сайте",
+        "переходите на сайт",
+        "собрали для вас", "подготовили для вас",
+        "рассказываем о топ", "рассказываем о самых",
+        "больше статей", "больше новостей",
+        "в нашем материале", "в нашей статье",
+    ]
+
+    TEASER_PATTERNS = [
+        "рассказываем о пяти", "рассказываем о шести",
+        "рассказываем о семи", "рассказываем о восьми",
+        "рассказываем о девяти", "рассказываем о десяти",
+        "собрали пять", "собрали шесть", "собрали семь",
+        "собрали восемь", "собрали девять", "собрали десять",
+        "топ-5", "топ-10", "топ-7", "топ 5", "топ 10", "топ 7",
+        "5 признаков", "7 признаков", "10 признаков",
+        "5 способов", "7 способов", "10 способов",
+        "5 причин", "7 причин", "10 причин",
+        "5 советов", "7 советов", "10 советов",
     ]
 
     def __init__(self, db: Database):
@@ -38,6 +59,10 @@ class PostFilter:
     def _is_external_source(self, text: str) -> bool:
         t = text.lower()
         return any(p in t for p in self.EXTERNAL_SOURCE_PATTERNS)
+
+    def _is_teaser(self, text: str) -> bool:
+        t = text.lower()
+        return any(p in t for p in self.TEASER_PATTERNS)
 
     def _is_duplicate(self, text: str) -> bool:
         return self.db.content_exists(text)
@@ -78,6 +103,10 @@ class PostFilter:
             if self._is_external_source(text):
                 self.db.mark_skipped(p[0])
                 print(f"[Filter] External source blocked (post #{p[0]})")
+                continue
+            if self._is_teaser(text):
+                self.db.mark_skipped(p[0])
+                print(f"[Filter] Teaser blocked (post #{p[0]})")
                 continue
             if self._is_duplicate(text):
                 self.db.mark_skipped(p[0])
