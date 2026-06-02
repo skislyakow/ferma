@@ -78,6 +78,7 @@ if __name__ == "__main__":
     if once:
         run_channel(env_path, once=True)
     else:
+        env_path = os.path.abspath(env_path)
         cfg = load_channel_config(env_path)
         import time
         interval = cfg["PUBLISH_INTERVAL_HOURS"] * 3600

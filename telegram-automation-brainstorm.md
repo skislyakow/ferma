@@ -224,7 +224,7 @@ t.me/s/ (веб-парсинг) → Yandex Translate → Telegram Bot API
 - Бот: @ContentAirdropBot — админ
 - Перевод: Yandex Translate (en→ru)
 - Доноры: @WatcherGuru, @forklog, @CoinTelegraph, @cryptobloom, @BanklessHQ
-- Опубликовано: 8+ постов с BingX CPA
+- Опубликовано: 12 постов с BingX CPA (из 46 всего)
 - CPA: BingX ($50-120/лид), вставка в каждый пост
 - Интервал: 0.5 ч, 2 поста за цикл
 
@@ -232,7 +232,7 @@ t.me/s/ (веб-парсинг) → Yandex Translate → Telegram Bot API
 - Бот: @FashionMyProfBot — админ
 - Перевод: Yandex Translate (en→ru, русские доноры без перевода)
 - Доноры: @fashion_style_ru, @elle_ru, @glamour_ru, @fashion
-- Опубликовано: 6+ постов (с картинками), CPA пока нет
+- Опубликовано: 6 постов с картинками (из 31 всего), CPA пока нет
 - Интервал: 0.25 ч, 1 пост за цикл
 - Примечание: @fashionnova удалён (только заголовки)
 
@@ -253,4 +253,16 @@ t.me/s/ (веб-парсинг) → Yandex Translate → Telegram Bot API
 - `mark_skipped()` — отфильтрованные посты не перепроверяются
 - `try/except` в цикле — процесс не умирает от SSL-ошибок Telegram API
 
-**VPS**: Timeweb (Нидерланды) — ожидает деплоя (без VPS t.me нестабилен из РФ)
+**Деплой (02.06.2026):**
+- Провайдер: ~~Timeweb~~ → **FirstVDS** (Амстердам, Нидерланды)
+- IP: 132.243.121.192
+- OS: Ubuntu 24.04
+- Директория: `/opt/farm/`
+- Репозиторий: `https://github.com/skislyakow/ferma`
+- Run: screen-сессии (`crypto` + `fashion`) с логами в `channels/*/bot.log`
+- Автозапуск: systemd сервис `tg-farm.service`
+- SSH: root@132.243.121.192
+
+**Статистика на момент деплоя:**
+- @airdrop_crypto_ru: 46 всего, 12 опубликовано, 1 пропущено
+- @fashionmyprofessn: 31 всего, 6 опубликовано, 1 пропущено
