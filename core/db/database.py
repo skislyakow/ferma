@@ -41,10 +41,11 @@ class Database:
 
     def _migrate(self):
         with sqlite3.connect(self.db_path) as conn:
-            try:
-                conn.execute("ALTER TABLE posts ADD COLUMN text_hash TEXT")
-            except sqlite3.OperationalError:
-                pass
+            for col in ("text_hash", "media_type"):
+                try:
+                    conn.execute(f"ALTER TABLE posts ADD COLUMN {col} TEXT")
+                except sqlite3.OperationalError:
+                    pass
 
     @staticmethod
     def make_text_hash(text: str) -> str:
@@ -71,30 +72,23 @@ class Database:
             ).fetchone()
             return row is not None
 
-    def save_post(self, source_channel, source_message_id, text, views, reactions_count, has_media, media_path=None, image_url=None):
+    def save_post(self, source_channel, source_message_id, text, views, reactions_count, has_media, media_path=None, image_url=None, media_type="photo"):
         text_hash = self.make_text_hash(text)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR IGNORE INTO posts
-                (source_channel, source_message_id, text, text_hash, views, reactions_count, has_media, media_path, image_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (source_channel, source_message_id, text, text_hash, views, reactions_count, int(has_media), media_path, image_url),
+                (source_channel, source_message_id, text, text_hash, views, reactions_count, has_media, media_path, image_url, media_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (source_channel, source_message_id, text, text_hash, views, reactions_count, int(has_media), media_path, image_url, media_type),
             )
 
     def get_unpublished_posts(self, limit=5):
         with sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(
-                """SELECT id, text, has_media, media_path, engagement_score, image_url
-                FROM (
-                    SELECT *, ROW_NUMBER() OVER (
-                        PARTITION BY source_channel
-                        ORDER BY engagement_score DESC, views DESC
-                    ) as rn
-                    FROM posts
-                    WHERE published = 0 AND text IS NOT NULL AND text != ''
-                )
-                WHERE rn = 1
-                ORDER BY engagement_score DESC
+                """SELECT id, text, has_media, media_path, engagement_score, image_url, media_type
+                FROM posts
+                WHERE published = 0 AND text IS NOT NULL AND text != ''
+                ORDER BY source_message_id DESC
                 LIMIT ?""",
                 (limit,),
             ).fetchall()

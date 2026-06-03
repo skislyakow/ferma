@@ -16,6 +16,31 @@ class WebParser:
         })
         os.makedirs("media", exist_ok=True)
 
+    def _extract_video_url(self, block: str) -> str | None:
+        match = re.search(r'data-video="([^"]+)"', block)
+        if match:
+            return match.group(1)
+        match = re.search(r'<video[^>]+src="([^"]+)"', block)
+        if match:
+            return match.group(1)
+        return None
+
+    def _download_video(self, url: str, msg_id: int) -> str | None:
+        try:
+            path = f"media/vid_{msg_id}.mp4"
+            r = self.session.get(url, timeout=120, stream=True)
+            r.raise_for_status()
+            total = 0
+            with open(path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    total += len(chunk)
+            print(f"  Video saved ({total//1024//1024}MB): {path}")
+            return path
+        except Exception as e:
+            print(f"  Video download failed: {e}")
+            return None
+
     def _clean_text(self, html_text: str) -> str:
         text = re.sub(r'<br\s*/?>', '\n', html_text)
         text = re.sub(r'<[^>]+>', '', text)
@@ -86,10 +111,11 @@ class WebParser:
                 raw_text = text_match.group(1) if text_match else ""
                 text = self._clean_text(raw_text)
                 image_url = self._extract_image_url(block)
+                video_url = self._extract_video_url(block)
 
-                if not text and not image_url:
+                if not text and not image_url and not video_url:
                     continue
-                if text and len(text) < 15 and not image_url:
+                if text and len(text) < 15 and not image_url and not video_url:
                     continue
 
                 views = 0
@@ -108,6 +134,7 @@ class WebParser:
                     "text": text,
                     "views": views,
                     "image_url": image_url,
+                    "video_url": video_url,
                 })
             except Exception:
                 continue
@@ -133,8 +160,13 @@ class WebParser:
                 if self.db.post_exists(channel_username, msg["id"]):
                     continue
                 media_path = None
-                if msg["image_url"]:
+                media_type = "text"
+                if msg["video_url"]:
+                    media_path = self._download_video(msg["video_url"], msg["id"])
+                    media_type = "video" if media_path else "text"
+                elif msg["image_url"]:
                     media_path = self._download_image(msg["image_url"], msg["id"])
+                    media_type = "photo" if media_path else "text"
                 self.db.save_post(
                     source_channel=channel_username,
                     source_message_id=msg["id"],
@@ -143,7 +175,8 @@ class WebParser:
                     reactions_count=0,
                     has_media=media_path is not None,
                     media_path=media_path,
-                    image_url=msg["image_url"],
+                    image_url=msg["video_url"] or msg["image_url"],
+                    media_type=media_type,
                 )
                 new_count += 1
 

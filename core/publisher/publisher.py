@@ -1,3 +1,4 @@
+import os
 import requests
 import random
 import re
@@ -9,6 +10,14 @@ class Publisher:
 
     def set_token(self, token: str):
         self.bot_token = token
+
+    def _cleanup_media(self, media_path):
+        if media_path and os.path.exists(media_path):
+            try:
+                os.remove(media_path)
+                print(f"[Publisher] Deleted local media: {media_path}")
+            except Exception as e:
+                print(f"[Publisher] Failed to delete {media_path}: {e}")
 
     def _clean_footers(self, text: str) -> str:
         lines = text.split("\n")
@@ -36,7 +45,7 @@ class Publisher:
 
     def publish(self, text: str, chat_id: str, post_counter: int = 0,
                 cpa_links: list[str] = None, cpa_every: int = 3,
-                media_path: str = None) -> bool:
+                media_path: str = None, media_type: str = "photo") -> bool:
         if not self.bot_token:
             print("[Publisher] No bot token!")
             return False
@@ -44,20 +53,8 @@ class Publisher:
         text = self._clean_footers(text)
         text = self._inject_cpa(text, post_counter, cpa_links or [], cpa_every)
 
-        if media_path and len(text) > 1024:
-            print("[Publisher] Text too long for photo caption, skipping image")
-            media_path = None
-
         try:
-            if media_path:
-                url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
-                with open(media_path, 'rb') as photo:
-                    resp = requests.post(url, data={
-                        "chat_id": chat_id,
-                        "caption": text,
-                        "parse_mode": "HTML",
-                    }, files={"photo": photo}, timeout=30)
-            else:
+            if not media_path:
                 url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
                 resp = requests.post(url, json={
                     "chat_id": chat_id,
@@ -65,9 +62,40 @@ class Publisher:
                     "parse_mode": "HTML",
                     "disable_web_page_preview": False,
                 }, timeout=15)
+            elif media_type == "video":
+                if len(text) > 1024:
+                    print("[Publisher] Text too long for video caption, skipping")
+                    text = ""
+                url = f"https://api.telegram.org/bot{self.bot_token}/sendVideo"
+                with open(media_path, 'rb') as video:
+                    resp = requests.post(url, data={
+                        "chat_id": chat_id,
+                        "caption": text,
+                        "parse_mode": "HTML",
+                        "supports_streaming": True,
+                    }, files={"video": video}, timeout=120)
+            else:
+                if len(text) > 1024:
+                    print("[Publisher] Text too long for photo caption, skipping image")
+                    url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+                    resp = requests.post(url, json={
+                        "chat_id": chat_id,
+                        "text": text,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": False,
+                    }, timeout=15)
+                else:
+                    url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
+                    with open(media_path, 'rb') as photo:
+                        resp = requests.post(url, data={
+                            "chat_id": chat_id,
+                            "caption": text,
+                            "parse_mode": "HTML",
+                        }, files={"photo": photo}, timeout=30)
 
             resp.raise_for_status()
-            print(f"[Publisher] OK{' (with image)' if media_path else ''}")
+            print(f"[Publisher] OK ({media_type})")
+            self._cleanup_media(media_path)
             return True
         except Exception as e:
             print(f"[Publisher] Failed: {e}")

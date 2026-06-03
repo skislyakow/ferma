@@ -44,7 +44,7 @@ def run_channel(env_path: str, once: bool = False):
 
     post_counter = 0
     for post in top_posts:
-        post_id, text, has_media, media_path, score, image_url = post
+        post_id, text, has_media, media_path, score, image_url, media_type = post
 
         print(f"[{name}] Translating #{post_id}...")
         translated = translator.translate(text)
@@ -58,6 +58,7 @@ def run_channel(env_path: str, once: bool = False):
             cpa_links=cfg["CPA_LINKS"],
             cpa_every=cfg["CPA_INSERT_EVERY"],
             media_path=media_path,
+            media_type=media_type,
         )
         if success:
             db.mark_published(post_id)
