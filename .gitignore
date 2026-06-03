@@ -42,5 +42,8 @@ channel-factory-framework.md
 # AI agent memory (project context, local only)
 AGENTS.md
 
+# Ideas and monetization log (business strategy, local only)
+IDEEV.md
+
 # Local scripts (not part of the farm)
 start_bot.ps1
