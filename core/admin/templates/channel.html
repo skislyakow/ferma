@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }} — Ferma Admin{% endblock %}
+{% block content %}
+<h1>{{ s.name }} <span style="font-size:14px;color:#8b949e">@{{ s.target }}</span></h1>
+
+<div class="grid">
+    <div class="card">
+        <h2>Stats</h2>
+        <div class="stat"><span class="label">Subscribers</span><span class="value">{{ s.subscribers }}</span></div>
+        <div class="stat"><span class="label">Donors</span><span class="value">{{ s.donors }}</span></div>
+        <div class="stat"><span class="label">DB total</span><span class="value">{{ s.db.total }}</span></div>
+        <div class="stat"><span class="label">Published</span><span class="value">{{ s.db.published }}</span></div>
+        <div class="stat"><span class="label">Skipped</span><span class="value">{{ s.db.skipped }}</span></div>
+        <div class="stat"><span class="label">Videos</span><span class="value">{{ s.db.video }}</span></div>
+    </div>
+
+    <div class="card">
+        <h2>Last Posts</h2>
+        {% if s.last_posts %}
+        {% for p in s.last_posts %}
+        <div class="stat">
+            <span class="label">#{{ p.id }} {{ p.date[:16] }}</span>
+            <span class="value">👁 {{ p.views }} 💬 {{ p.reactions }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="stat"><span class="label">No posts yet</span></div>
+        {% endif %}
+    </div>
+</div>
+
+<p><a href="/logs/{{ s.name }}?token={{ token }}">View logs</a></p>
+<p><a href="/?token={{ token }}">← Back</a></p>
+{% endblock %}
