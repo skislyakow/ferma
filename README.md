@@ -16,8 +16,8 @@ ferma/
 │   └── db/database.py         # SQLite
 │
 ├── channels/                  # Каналы фермы
-│   ├── crypto/                # @airdrop_crypto_ru
-│   ├── fashion/               # @fashionmyprofessn
+│   ├── crypto/                # Крипта
+│   ├── fashion/               # Мода
 │   └── template/              # Шаблон для нового канала
 │
 ├── manage.py                  # CLI (не используется — screen-ы)
@@ -50,5 +50,5 @@ PYTHONUNBUFFERED=1 screen -dmS fashion bash -c 'cd /opt/farm && exec venv/bin/py
 
 | Канал | CPA | Интервал |
 |-------|-----|----------|
-| @airdrop_crypto_ru | BingX | 30 мин |
-| @fashionmyprofessn | — | 30 мин |
+| Крипта | + | 30 мин |
+| Мода | — | 30 мин |
