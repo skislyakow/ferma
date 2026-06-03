@@ -15,7 +15,7 @@ class Publisher:
         clean = []
         for line in lines:
             stripped = line.strip().lower()
-            if re.search(r"^(мы в|подпишись|присоединяйся|больше новостей|наш (канал|блог|сайт)|все новости|источник|читать далее|по всем вопросам|реклама|сотрудничество)", stripped):
+            if re.search(r"^(мы в|я в|я на|мой (instagram|pinterest|telegram|youtube|tiktok|facebook|twitter|vk)|подпишись|присоединяйся|больше новостей|наш (канал|блог|сайт)|все новости|источник|читать далее|по всем вопросам|реклама|сотрудничество)", stripped):
                 continue
             if re.search(r"^(читайте|смотрите|больше|источник|via|source)", stripped):
                 continue
