@@ -31,5 +31,10 @@ Thumbs.db
 *.swo
 *~
 
+# Design docs (dev notes, not part of the farm)
+telegram-automation-brainstorm.md
+telegram-farm-architecture.md
+channel-factory-framework.md
+
 # Local scripts (not part of the farm)
 start_bot.ps1

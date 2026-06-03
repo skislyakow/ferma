@@ -48,7 +48,7 @@ PYTHONUNBUFFERED=1 screen -dmS fashion bash -c 'cd /opt/farm && exec venv/bin/py
 
 ## Текущие каналы
 
-| Канал | Доноры | CPA | Интервал |
-|-------|--------|-----|----------|
-| @airdrop_crypto_ru | WatcherGuru, forklog, CoinTelegraph | BingX | 30 мин |
-| @fashionmyprofessn | @fashion, @outfits, @style_tutor, @makeup_pinterest | — | 30 мин |
+| Канал | CPA | Интервал |
+|-------|-----|----------|
+| @airdrop_crypto_ru | BingX | 30 мин |
+| @fashionmyprofessn | — | 30 мин |
