@@ -39,5 +39,8 @@ telegram-automation-brainstorm.md
 telegram-farm-architecture.md
 channel-factory-framework.md
 
+# AI agent memory (project context, local only)
+AGENTS.md
+
 # Local scripts (not part of the farm)
 start_bot.ps1
