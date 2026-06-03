@@ -31,6 +31,9 @@ Thumbs.db
 *.swo
 *~
 
+# Dev journal (local history, not for GitHub)
+ЖУРНАЛ.md
+
 # Design docs (dev notes, not part of the farm)
 telegram-automation-brainstorm.md
 telegram-farm-architecture.md
