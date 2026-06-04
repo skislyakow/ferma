@@ -59,7 +59,7 @@ form { max-width:600px; }
 
 def head(title, token):
     return f"""<!DOCTYPE html><html lang='ru'><head><meta charset='utf-8'><title>{title}</title><style>{CSS}</style></head><body>
-<div class='nav'><a href='/?token={token}'>Dashboard</a><a href='/channels?token={token}'>Channels</a><a href='/filters?token={token}'>Filters</a><a href='/add?token={token}'>+ Add Channel</a></div>"""
+<div class='nav'><a href='/?token={token}'>Панель</a><a href='/channels?token={token}'>Каналы</a><a href='/filters?token={token}'>Фильтры</a><a href='/add?token={token}'>+ Добавить канал</a></div>"""
 
 def foot():
     return "</body></html>"
@@ -94,60 +94,60 @@ async def dashboard(token: str = Query(None), msg: str = None):
     statuses = analytics.farm_status()
     msg_html = ""
     if msg:
-        cls = "msg-success" if not msg.startswith("Error") else "msg-error"
+        cls = "msg-error" if msg.startswith("Ошибка") else "msg-success"
         msg_html = f"<div class='{cls}'>{msg}</div>"
     cards = ""
     for s in statuses:
         if "error" in s:
-            cards += f"<div class='card'><h2>{s['name']}</h2><p>Error: {s['error']}</p></div>"
+            cards += f"<div class='card'><h2>{s['name']}</h2><p>Ошибка: {s['error']}</p></div>"
             continue
         running = screen_running(s["name"])
-        status_tag = "<span style='color:#3fb950'>● Running</span>" if running else "<span style='color:#f85149'>● Stopped</span>"
+        status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
         cards += f"""
         <div class='card'>
             <h2 style='margin-top:0'><a href='/channel/{s['name']}?token={token}'>{s['name']}</a> <span style='float:right;font-size:13px;color:#8b949e'>@{s['target']}</span></h2>
-            <div class='stat'><span class='label'>Status</span><span class='value'>{status_tag}</span></div>
-            <div class='stat'><span class='label'>Subscribers</span><span class='value'>{s['subscribers']}</span></div>
-            <div class='stat'><span class='label'>Donors</span><span class='value'>{s['donors']}</span></div>
-            <div class='stat'><span class='label'>DB total</span><span class='value'>{s['db']['total']}</span></div>
-            <div class='stat'><span class='label'>Published</span><span class='value'>{s['db']['published']}</span></div>
-            <div class='stat'><span class='label'>Skipped</span><span class='value'>{s['db']['skipped']}</span></div>
-            <div class='stat'><span class='label'>Videos</span><span class='value'>{s['db']['video']}</span></div>
+            <div class='stat'><span class='label'>Статус</span><span class='value'>{status_tag}</span></div>
+            <div class='stat'><span class='label'>Подписчики</span><span class='value'>{s['subscribers']}</span></div>
+            <div class='stat'><span class='label'>Доноры</span><span class='value'>{s['donors']}</span></div>
+            <div class='stat'><span class='label'>БД всего</span><span class='value'>{s['db']['total']}</span></div>
+            <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s['db']['published']}</span></div>
+            <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s['db']['skipped']}</span></div>
+            <div class='stat'><span class='label'>Видео</span><span class='value'>{s['db']['video']}</span></div>
             <p style='margin-top:10px'>
-                <a href='/logs/{s['name']}?token={token}'>[logs]</a>
-                <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Manage</a>
+                <a href='/logs/{s['name']}?token={token}'>[логи]</a>
+                <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Управление</a>
             </p>
         </div>"""
-    body = f"<h1>Farm Dashboard</h1>{msg_html}<div class='grid'>{cards}</div>"
-    return head("Dashboard — Ferma", token) + body + foot()
+    body = f"<h1>Панель управления</h1>{msg_html}<div class='grid'>{cards}</div>"
+    return head("Панель — Ferma", token) + body + foot()
 
 
 @app.get("/add", response_class=HTMLResponse)
 async def add_channel_form(token: str = Query(None)):
     check_auth(token)
     body = f"""
-    <h1>Add Channel</h1>
+    <h1>Добавить канал</h1>
     <form action='/api/channel/create?token={token}' method='post'>
-        <div class='form-group'><label>Channel name (directory)</label><input type='text' name='name' placeholder='e.g. tech' required></div>
+        <div class='form-group'><label>Название (папка)</label><input type='text' name='name' placeholder='например: tech' required></div>
         <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required></div>
-        <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@my_channel' required></div>
-        <div class='form-group'><label>SOURCE_CHANNELS (comma-separated)</label><input type='text' name='source_channels' placeholder='@donor1,@donor2' required></div>
+        <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@moy_kal' required></div>
+        <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@donor1,@donor2' required></div>
         <div class='form-row'>
-            <div class='form-group'><label>PUBLISH_INTERVAL_HOURS</label><input type='number' name='publish_interval_hours' value='0.5' step='0.1'></div>
-            <div class='form-group'><label>POSTS_PER_CYCLE</label><input type='number' name='posts_per_cycle' value='2'></div>
+            <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='0.5' step='0.1'></div>
+            <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='2'></div>
         </div>
         <div class='form-row'>
-            <div class='form-group'><label>SOURCE_LANG</label><input type='text' name='source_lang' value='en'></div>
-            <div class='form-group'><label>TARGET_LANG</label><input type='text' name='target_lang' value='ru'></div>
+            <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='en'></div>
+            <div class='form-group'><label>Язык перевода</label><input type='text' name='target_lang' value='ru'></div>
         </div>
-        <div class='form-group'><label>CPA_LINKS (optional, comma-separated)</label><input type='text' name='cpa_links' placeholder='https://...'></div>
+        <div class='form-group'><label>CPA-ссылки (опционально, через запятую)</label><input type='text' name='cpa_links' placeholder='https://...'></div>
         <div class='form-row'>
-            <div class='form-group'><label>CPA_INSERT_EVERY</label><input type='number' name='cpa_insert_every' value='3'></div>
-            <div class='form-group'><label>Start after creation</label><input type='checkbox' name='start_now' value='1' style='width:auto;margin-top:8px' checked></div>
+            <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='3'></div>
+            <div class='form-group'><label>Запустить после создания</label><input type='checkbox' name='start_now' value='1' style='width:auto;margin-top:8px' checked></div>
         </div>
-        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Create Channel</button> <a href='/?token={token}' class='btn btn-warning'>Cancel</a></p>
+        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Создать</button> <a href='/?token={token}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
-    return head("Add Channel — Ferma", token) + body + foot()
+    return head("Добавить канал — Ferma", token) + body + foot()
 
 
 @app.post("/api/channel/create")
@@ -172,12 +172,11 @@ async def api_create_channel(
     env_path = os.path.join(ch_dir, ".env")
 
     if os.path.exists(ch_dir):
-        return RedirectResponse(f"/?token={token}&msg=Error%3A+channel+%27{name}%27+already+exists", 302)
+        return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+уже+существует", 302)
 
-    # Validate bot token
     bot_username = get_bot_name(bot_token)
     if bot_username == "?":
-        return RedirectResponse(f"/?token={token}&msg=Error%3A+invalid+BOT_TOKEN+for+%27{name}%27", 302)
+        return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+неверный+BOT_TOKEN+для+%27{name}%27", 302)
 
     target = target_channel.strip().lstrip("@")
     sources = ",".join(x.strip() for x in source_channels.split(",") if x.strip())
@@ -221,21 +220,21 @@ CPA_INSERT_EVERY={cpa_insert_every}
     if start_now == "1":
         _start_screen(name)
 
-    return RedirectResponse(f"/?token={token}&msg=Channel+%27{name}%27+created+%28%40{target}%29", 302)
+    return RedirectResponse(f"/?token={token}&msg=Канал+%27{name}%27+создан+%28%40{target}%29", 302)
 
 
 @app.post("/api/channel/{name}/start")
 async def api_start_channel(name: str, token: str = Query(None)):
     check_auth(token)
     _start_screen(name)
-    return RedirectResponse(f"/?token={token}&msg={name}+started", 302)
+    return RedirectResponse(f"/?token={token}&msg={name}+запущен", 302)
 
 
 @app.post("/api/channel/{name}/stop")
 async def api_stop_channel(name: str, token: str = Query(None)):
     check_auth(token)
     subprocess.run(["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5)
-    return RedirectResponse(f"/?token={token}&msg={name}+stopped", 302)
+    return RedirectResponse(f"/?token={token}&msg={name}+остановлен", 302)
 
 
 @app.post("/api/channel/{name}/delete")
@@ -243,14 +242,13 @@ async def api_delete_channel(name: str, token: str = Query(None)):
     check_auth(token)
     ch_dir = os.path.join(CHANNELS_DIR, name)
     if not os.path.exists(ch_dir):
-        return RedirectResponse(f"/?token={token}&msg=Error%3A+channel+%27{name}%27+not+found", 302)
+        return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302)
 
-    # Stop screen first
     subprocess.run(["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5)
 
     import shutil
     shutil.rmtree(ch_dir)
-    return RedirectResponse(f"/?token={token}&msg=Channel+%27{name}%27+deleted", 302)
+    return RedirectResponse(f"/?token={token}&msg=Канал+%27{name}%27+удален", 302)
 
 
 @app.get("/channel/{name}", response_class=HTMLResponse)
@@ -259,47 +257,47 @@ async def channel_detail(name: str, token: str = Query(None)):
     analytics = FarmAnalytics()
     s = analytics.channel_stats(name)
     if "error" in s:
-        return HTMLResponse(f"Channel '{name}' not found", 404)
+        return HTMLResponse(f"Канал '{name}' не найден", 404)
     posts = ""
     for p in s.get("last_posts", []):
         posts += f"<div class='stat'><span class='label'>#{p['id']} {p['date'][:16]}</span><span class='value'>👁 {p['views']} 💬 {p['reactions']}</span></div>"
     running = screen_running(name)
-    status_tag = "<span style='color:#3fb950'>● Running</span>" if running else "<span style='color:#f85149'>● Stopped</span>"
+    status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
     body = f"""
     <h1>{s['name']} <span style='font-size:14px;color:#8b949e'>@{s['target']}</span></h1>
     <div class='grid'>
         <div class='card'>
-            <h2>Stats</h2>
-            <div class='stat'><span class='label'>Status</span><span class='value'>{status_tag}</span></div>
-            <div class='stat'><span class='label'>Subscribers</span><span class='value'>{s['subscribers']}</span></div>
-            <div class='stat'><span class='label'>Donors</span><span class='value'>{s['donors']}</span></div>
-            <div class='stat'><span class='label'>DB total</span><span class='value'>{s['db']['total']}</span></div>
-            <div class='stat'><span class='label'>Published</span><span class='value'>{s['db']['published']}</span></div>
-            <div class='stat'><span class='label'>Skipped</span><span class='value'>{s['db']['skipped']}</span></div>
-            <div class='stat'><span class='label'>Videos</span><span class='value'>{s['db']['video']}</span></div>
+            <h2>Статистика</h2>
+            <div class='stat'><span class='label'>Статус</span><span class='value'>{status_tag}</span></div>
+            <div class='stat'><span class='label'>Подписчики</span><span class='value'>{s['subscribers']}</span></div>
+            <div class='stat'><span class='label'>Доноры</span><span class='value'>{s['donors']}</span></div>
+            <div class='stat'><span class='label'>БД всего</span><span class='value'>{s['db']['total']}</span></div>
+            <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s['db']['published']}</span></div>
+            <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s['db']['skipped']}</span></div>
+            <div class='stat'><span class='label'>Видео</span><span class='value'>{s['db']['video']}</span></div>
         </div>
         <div class='card'>
-            <h2>Last Posts</h2>
-            {posts if posts else "<div class='stat'><span class='label'>No posts yet</span></div>"}
-            <p style='margin-top:10px'><a href='/logs/{name}?token={token}'>View logs</a></p>
+            <h2>Последние посты</h2>
+            {posts if posts else "<div class='stat'><span class='label'>Пока нет постов</span></div>"}
+            <p style='margin-top:10px'><a href='/logs/{name}?token={token}'>Логи</a></p>
         </div>
     </div>
     <div class='card'>
-        <h2>Actions</h2>
+        <h2>Действия</h2>
         <p style='margin-top:8px'>
-            <a href='/channel/{name}/edit?token={token}' class='btn btn-primary btn-sm'>⚙ Edit Config</a>
+            <a href='/channel/{name}/edit?token={token}' class='btn btn-primary btn-sm'>⚙ Настройки</a>
             <form action='/api/channel/{name}/start?token={token}' method='post' style='display:inline'>
-                <button type='submit' class='btn btn-primary btn-sm' {'disabled' if running else ''}>▶ Start</button>
+                <button type='submit' class='btn btn-primary btn-sm' {'disabled' if running else ''}>▶ Запустить</button>
             </form>
             <form action='/api/channel/{name}/stop?token={token}' method='post' style='display:inline'>
-                <button type='submit' class='btn btn-warning btn-sm' {'disabled' if not running else ''}>⏹ Stop</button>
+                <button type='submit' class='btn btn-warning btn-sm' {'disabled' if not running else ''}>⏹ Остановить</button>
             </form>
-            <form action='/api/channel/{name}/delete?token={token}' method='post' style='display:inline' onsubmit='return confirm("Delete {name} and all data?")'>
-                <button type='submit' class='btn btn-danger btn-sm'>🗑 Delete</button>
+            <form action='/api/channel/{name}/delete?token={token}' method='post' style='display:inline' onsubmit='return confirm("Удалить {name} и все данные?")'>
+                <button type='submit' class='btn btn-danger btn-sm'>🗑 Удалить</button>
             </form>
         </p>
     </div>
-    <p><a href='/?token={token}'>← Back</a></p>"""
+    <p><a href='/?token={token}'>← Назад</a></p>"""
     return head(f"{name} — Ferma", token) + body + foot()
 
 
@@ -311,30 +309,30 @@ async def channels_list(token: str = Query(None)):
     rows = ""
     for s in statuses:
         if "error" in s:
-            rows += f"<tr><td>{s['name']}</td><td colspan='5'>Error: {s['error']}</td></tr>"
+            rows += f"<tr><td>{s['name']}</td><td colspan='5'>Ошибка: {s['error']}</td></tr>"
             continue
         running = screen_running(s["name"])
         status_tag = "<span style='color:#3fb950'>●</span>" if running else "<span style='color:#f85149'>●</span>"
         rows += f"""<tr>
             <td><a href='/channel/{s['name']}?token={token}'>{s['name']}</a></td>
             <td>@{s['target']}</td>
-            <td>{status_tag} {'Running' if running else 'Stopped'}</td>
+            <td>{status_tag} {'Работает' if running else 'Остановлен'}</td>
             <td>{s['subscribers']}</td>
             <td>{s['donors']}</td>
             <td>{s['db']['total']}/{s['db']['published']}/{s['db']['skipped']}</td>
             <td>
-                <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Manage</a>
-                <a href='/channel/{s['name']}/edit?token={token}' class='btn btn-warning btn-sm'>Edit</a>
+                <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Управление</a>
+                <a href='/channel/{s['name']}/edit?token={token}' class='btn btn-warning btn-sm'>Настройки</a>
             </td>
         </tr>"""
     body = f"""
-    <h1>All Channels</h1>
+    <h1>Все каналы</h1>
     <table>
-        <tr><th>Name</th><th>Target</th><th>Status</th><th>Subs</th><th>Donors</th><th>DB (T/P/S)</th><th>Actions</th></tr>
-        {rows if rows else "<tr><td colspan='7' style='text-align:center;color:#8b949e'>No channels</td></tr>"}
+        <tr><th>Название</th><th>Канал</th><th>Статус</th><th>Подп</th><th>Доноры</th><th>БД (В/О/П)</th><th>Действия</th></tr>
+        {rows if rows else "<tr><td colspan='7' style='text-align:center;color:#8b949e'>Нет каналов</td></tr>"}
     </table>
-    <p><a href='/?token={token}'>← Back</a></p>"""
-    return head("Channels — Ferma", token) + body + foot()
+    <p><a href='/?token={token}'>← Назад</a></p>"""
+    return head("Каналы — Ferma", token) + body + foot()
 
 
 @app.get("/channel/{name}/edit", response_class=HTMLResponse)
@@ -342,7 +340,7 @@ async def edit_channel_form(name: str, token: str = Query(None)):
     check_auth(token)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
-        return HTMLResponse(f"Channel '{name}' not found", 404)
+        return HTMLResponse(f"Канал '{name}' не найден", 404)
 
     from dotenv import dotenv_values
     cfg = dotenv_values(env_path)
@@ -351,31 +349,31 @@ async def edit_channel_form(name: str, token: str = Query(None)):
         return cfg.get(key, default)
 
     body = f"""
-    <h1>Edit: {name}</h1>
+    <h1>Настройки: {name}</h1>
     <form action='/api/channel/{name}/update?token={token}' method='post'>
         <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' value='{v("BOT_TOKEN")}' required></div>
         <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' value='{v("TARGET_CHANNEL")}' required></div>
-        <div class='form-group'><label>SOURCE_CHANNELS (comma-separated)</label><input type='text' name='source_channels' value='{v("SOURCE_CHANNELS")}' required></div>
+        <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' value='{v("SOURCE_CHANNELS")}' required></div>
         <div class='form-row'>
-            <div class='form-group'><label>PUBLISH_INTERVAL_HOURS</label><input type='number' name='publish_interval_hours' value='{v("PUBLISH_INTERVAL_HOURS", "0.5")}' step='0.1'></div>
-            <div class='form-group'><label>POSTS_PER_CYCLE</label><input type='number' name='posts_per_cycle' value='{v("POSTS_PER_CYCLE", "2")}'></div>
+            <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='{v("PUBLISH_INTERVAL_HOURS", "0.5")}' step='0.1'></div>
+            <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='{v("POSTS_PER_CYCLE", "2")}'></div>
         </div>
         <div class='form-row'>
-            <div class='form-group'><label>SOURCE_LANG</label><input type='text' name='source_lang' value='{v("SOURCE_LANG", "en")}'></div>
-            <div class='form-group'><label>TARGET_LANG</label><input type='text' name='target_lang' value='{v("TARGET_LANG", "ru")}'></div>
+            <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='{v("SOURCE_LANG", "en")}'></div>
+            <div class='form-group'><label>Язык перевода</label><input type='text' name='target_lang' value='{v("TARGET_LANG", "ru")}'></div>
         </div>
-        <div class='form-group'><label>CPA_LINKS (optional, comma-separated)</label><input type='text' name='cpa_links' value='{v("CPA_LINKS")}' placeholder='https://...'></div>
+        <div class='form-group'><label>CPA-ссылки (опционально, через запятую)</label><input type='text' name='cpa_links' value='{v("CPA_LINKS")}' placeholder='https://...'></div>
         <div class='form-row'>
-            <div class='form-group'><label>CPA_INSERT_EVERY</label><input type='number' name='cpa_insert_every' value='{v("CPA_INSERT_EVERY", "3")}'></div>
-            <div class='form-group'><label>YC_TRANSLATE_API_KEY</label><input type='text' name='yc_api_key' value='{v("YC_TRANSLATE_API_KEY")}'></div>
+            <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='{v("CPA_INSERT_EVERY", "3")}'></div>
+            <div class='form-group'><label>YC ключ перевода</label><input type='text' name='yc_api_key' value='{v("YC_TRANSLATE_API_KEY")}'></div>
         </div>
         <div class='form-row'>
-            <div class='form-group'><label>YC_FOLDER_ID</label><input type='text' name='yc_folder_id' value='{v("YC_FOLDER_ID")}'></div>
-            <div class='form-group'><label>Restart after update</label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked></div>
+            <div class='form-group'><label>YC Folder ID</label><input type='text' name='yc_folder_id' value='{v("YC_FOLDER_ID")}'></div>
+            <div class='form-group'><label>Перезапустить после сохранения</label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked></div>
         </div>
-        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Save</button> <a href='/channel/{name}?token={token}' class='btn btn-warning'>Cancel</a></p>
+        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Сохранить</button> <a href='/channel/{name}?token={token}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
-    return head(f"Edit {name} — Ferma", token) + body + foot()
+    return head(f"Настройки {name} — Ferma", token) + body + foot()
 
 
 @app.post("/api/channel/{name}/update")
@@ -397,7 +395,7 @@ async def api_update_channel(
     check_auth(token)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
-        return RedirectResponse(f"/?token={token}&msg=Error%3A+channel+%27{name}%27+not+found", 302)
+        return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302)
 
     target = target_channel.strip().lstrip("@")
     sources = ",".join(x.strip() for x in source_channels.split(",") if x.strip())
@@ -436,12 +434,12 @@ async def view_logs(name: str, lines: int = 50, token: str = Query(None)):
     check_auth(token)
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
     if not os.path.exists(log_path):
-        return HTMLResponse(f"No log for '{name}'", 404)
+        return HTMLResponse(f"Нет логов для '{name}'", 404)
     with open(log_path, "r", encoding="utf-8", errors="replace") as f:
         all_lines = f.readlines()
         tail = all_lines[-lines:]
-    body = f"<h1>Logs: {name}</h1><p><a href='/channel/{name}?token={token}'>← Back to channel</a></p><pre>{''.join(tail)}</pre>"
-    return head(f"Logs: {name} — Ferma", token) + body + foot()
+    body = f"<h1>Логи: {name}</h1><p><a href='/channel/{name}?token={token}'>← Назад к каналу</a></p><pre>{''.join(tail)}</pre>"
+    return head(f"Логи: {name} — Ferma", token) + body + foot()
 
 
 @app.get("/filters", response_class=HTMLResponse)
@@ -454,10 +452,10 @@ async def filters_page(token: str = Query(None), msg: str = None):
         cls = "msg-success" if "added" in msg or "removed" in msg else "msg-error"
         msg_html = f"<div class='{cls}'>{msg}</div>"
     groups = {
-        "footer_patterns": "Footer Patterns (lines containing these are removed)",
-        "ad_keywords": "Ad Keywords (2+ matches = post blocked)",
-        "external_source_patterns": "External Source Patterns (post blocked)",
-        "teaser_patterns": "Teaser Patterns (post blocked)",
+        "footer_patterns": "Футеры (строки с этой фразой удаляются из текста)",
+        "ad_keywords": "Рекламные слова (2+ совпадения = пост заблокирован)",
+        "external_source_patterns": "Внешние источники (пост блокируется)",
+        "teaser_patterns": "Тизеры/списки (пост блокируется)",
     }
     sections = ""
     for key, label in groups.items():
@@ -469,19 +467,19 @@ async def filters_page(token: str = Query(None), msg: str = None):
             f"<input type='hidden' name='value' value='{item}'>"
             f"<button type='submit' class='btn btn-danger btn-sm'>X</button></form></td></tr>"
             for item in items
-        ) if items else "<tr><td colspan='2' style='color:#8b949e'>(empty)</td></tr>"
+        ) if items else "<tr><td colspan='2' style='color:#8b949e'>(пусто)</td></tr>"
         sections += f"""
         <div class='card'>
             <h2>{label}</h2>
-            <table><tr><th>Pattern</th><th style='width:50px'></th></tr>{rows}</table>
+            <table><tr><th>Фраза</th><th style='width:50px'></th></tr>{rows}</table>
             <form action='/api/filters/add?token={token}' method='post' style='margin-top:8px;display:flex;gap:8px'>
                 <input type='hidden' name='group' value='{key}'>
-                <input type='text' name='value' placeholder='new pattern...' style='margin-bottom:0;flex:1' required>
-                <button type='submit' class='btn btn-primary btn-sm'>Add</button>
+                <input type='text' name='value' placeholder='новая фраза...' style='margin-bottom:0;flex:1' required>
+                <button type='submit' class='btn btn-primary btn-sm'>Добавить</button>
             </form>
         </div>"""
-    body = f"<h1>Filter Manager</h1>{msg_html}{sections}<p><a href='/?token={token}'>← Back</a></p>"
-    return head("Filters — Ferma", token) + body + foot()
+    body = f"<h1>Управление фильтрами</h1>{msg_html}{sections}<p><a href='/?token={token}'>← Назад</a></p>"
+    return head("Фильтры — Ferma", token) + body + foot()
 
 
 @app.post("/api/filters/add")
