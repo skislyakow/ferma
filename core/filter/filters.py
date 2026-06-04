@@ -7,10 +7,12 @@ from core.filter.manage import load_filters
 class PostFilter:
     def __init__(self, db: Database):
         self.db = db
-        _f = load_filters()
-        self.AD_KEYWORDS = _f.get("ad_keywords", [])
-        self.EXTERNAL_SOURCE_PATTERNS = _f.get("external_source_patterns", [])
-        self.TEASER_PATTERNS = _f.get("teaser_patterns", [])
+
+    def _reload(self):
+        f = load_filters()
+        self.AD_KEYWORDS = f.get("ad_keywords", [])
+        self.EXTERNAL_SOURCE_PATTERNS = f.get("external_source_patterns", [])
+        self.TEASER_PATTERNS = f.get("teaser_patterns", [])
 
     def _is_ad(self, text: str) -> bool:
         t = text.lower()
@@ -45,6 +47,7 @@ class PostFilter:
                 )
 
     def get_top_posts(self, limit: int = 5, min_length: int = 50):
+        self._reload()
         self.update_engagement_scores()
         posts = self.db.get_unpublished_posts(limit=limit * 5)
         clean = []
