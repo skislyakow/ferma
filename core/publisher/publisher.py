@@ -20,13 +20,19 @@ class Publisher:
                 print(f"[Publisher] Failed to delete {media_path}: {e}")
 
     def _clean_footers(self, text: str) -> str:
+        from core.filter.manage import load_filters
+        _f = load_filters()
+        footer_patterns = _f.get("footer_patterns", [])
         lines = text.split("\n")
         clean = []
         for line in lines:
             stripped = line.strip().lower()
-            if re.search(r"^(мы в|я в|я на|мой (instagram|pinterest|telegram|youtube|tiktok|facebook|twitter|vk)|подпишись|присоединяйся|больше новостей|наш (канал|блог|сайт)|все новости|источник|читать далее|по всем вопросам|реклама|сотрудничество)", stripped):
-                continue
-            if re.search(r"^(читайте|смотрите|больше|источник|via|source)", stripped):
+            skip = False
+            for pat in footer_patterns:
+                if pat in stripped or stripped.startswith(pat):
+                    skip = True
+                    break
+            if skip:
                 continue
             line = re.sub(r'https?://\S+', '', line).strip()
             if line:

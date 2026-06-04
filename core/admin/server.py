@@ -59,7 +59,7 @@ form { max-width:600px; }
 
 def head(title, token):
     return f"""<!DOCTYPE html><html lang='ru'><head><meta charset='utf-8'><title>{title}</title><style>{CSS}</style></head><body>
-<div class='nav'><a href='/?token={token}'>Dashboard</a><a href='/channels?token={token}'>Channels</a><a href='/add?token={token}'>+ Add Channel</a></div>"""
+<div class='nav'><a href='/?token={token}'>Dashboard</a><a href='/channels?token={token}'>Channels</a><a href='/filters?token={token}'>Filters</a><a href='/add?token={token}'>+ Add Channel</a></div>"""
 
 def foot():
     return "</body></html>"
@@ -442,6 +442,71 @@ async def view_logs(name: str, lines: int = 50, token: str = Query(None)):
         tail = all_lines[-lines:]
     body = f"<h1>Logs: {name}</h1><p><a href='/channel/{name}?token={token}'>← Back to channel</a></p><pre>{''.join(tail)}</pre>"
     return head(f"Logs: {name} — Ferma", token) + body + foot()
+
+
+@app.get("/filters", response_class=HTMLResponse)
+async def filters_page(token: str = Query(None), msg: str = None):
+    check_auth(token)
+    from core.filter.manage import load_filters
+    f = load_filters()
+    msg_html = ""
+    if msg:
+        cls = "msg-success" if "added" in msg or "removed" in msg else "msg-error"
+        msg_html = f"<div class='{cls}'>{msg}</div>"
+    groups = {
+        "footer_patterns": "Footer Patterns (lines containing these are removed)",
+        "ad_keywords": "Ad Keywords (2+ matches = post blocked)",
+        "external_source_patterns": "External Source Patterns (post blocked)",
+        "teaser_patterns": "Teaser Patterns (post blocked)",
+    }
+    sections = ""
+    for key, label in groups.items():
+        items = f.get(key, [])
+        rows = "".join(
+            f"<tr><td>{item}</td><td>"
+            f"<form action='/api/filters/remove?token={token}' method='post' style='display:inline'>"
+            f"<input type='hidden' name='group' value='{key}'>"
+            f"<input type='hidden' name='value' value='{item}'>"
+            f"<button type='submit' class='btn btn-danger btn-sm'>X</button></form></td></tr>"
+            for item in items
+        ) if items else "<tr><td colspan='2' style='color:#8b949e'>(empty)</td></tr>"
+        sections += f"""
+        <div class='card'>
+            <h2>{label}</h2>
+            <table><tr><th>Pattern</th><th style='width:50px'></th></tr>{rows}</table>
+            <form action='/api/filters/add?token={token}' method='post' style='margin-top:8px;display:flex;gap:8px'>
+                <input type='hidden' name='group' value='{key}'>
+                <input type='text' name='value' placeholder='new pattern...' style='margin-bottom:0;flex:1' required>
+                <button type='submit' class='btn btn-primary btn-sm'>Add</button>
+            </form>
+        </div>"""
+    body = f"<h1>Filter Manager</h1>{msg_html}{sections}<p><a href='/?token={token}'>← Back</a></p>"
+    return head("Filters — Ferma", token) + body + foot()
+
+
+@app.post("/api/filters/add")
+async def api_filter_add(token: str = Query(None), group: str = Form(...), value: str = Form(...)):
+    check_auth(token)
+    from core.filter.manage import load_filters, save_filters
+    f = load_filters()
+    if group not in f:
+        f[group] = []
+    v = value.strip().lower()
+    if v and v not in f[group]:
+        f[group].append(v)
+        save_filters(f)
+    return RedirectResponse(f"/filters?token={token}&msg=%27{v}%27+added+to+{group}", 302)
+
+
+@app.post("/api/filters/remove")
+async def api_filter_remove(token: str = Query(None), group: str = Form(...), value: str = Form(...)):
+    check_auth(token)
+    from core.filter.manage import load_filters, save_filters
+    f = load_filters()
+    if group in f:
+        f[group] = [x for x in f[group] if x != value.strip().lower()]
+        save_filters(f)
+    return RedirectResponse(f"/filters?token={token}&msg=%27{value}%27+removed+from+{group}", 302)
 
 
 def _get_default_yc_keys() -> dict:
