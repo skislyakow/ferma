@@ -16,7 +16,7 @@ class PostFilter:
 
     def _is_ad(self, text: str) -> bool:
         t = text.lower()
-        return sum(1 for kw in self.AD_KEYWORDS if kw in t) >= 2
+        return any(kw in t for kw in self.AD_KEYWORDS)
 
     def _is_external_source(self, text: str) -> bool:
         t = text.lower()

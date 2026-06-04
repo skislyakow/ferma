@@ -31,6 +31,7 @@ DEFAULT_FILTERS = {
         "выполняй задачи", "complete tasks",
         "fragment.com", "логин на продажу", "username",
         "фрагмент", "аукцион", "prime",
+        "реклама", "рекламу",
     ],
     "external_source_patterns": [
         "читайте на", "читайте в", "подробнее на", "подробнее в",
