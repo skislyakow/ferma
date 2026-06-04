@@ -59,7 +59,7 @@ form { max-width:600px; }
 
 def head(title, token):
     return f"""<!DOCTYPE html><html lang='ru'><head><meta charset='utf-8'><title>{title}</title><style>{CSS}</style></head><body>
-<div class='nav'><a href='/?token={token}'>Dashboard</a><a href='/add?token={token}'>+ Add Channel</a></div>"""
+<div class='nav'><a href='/?token={token}'>Dashboard</a><a href='/channels?token={token}'>Channels</a><a href='/add?token={token}'>+ Add Channel</a></div>"""
 
 def foot():
     return "</body></html>"
@@ -115,7 +115,7 @@ async def dashboard(token: str = Query(None), msg: str = None):
             <div class='stat'><span class='label'>Videos</span><span class='value'>{s['db']['video']}</span></div>
             <p style='margin-top:10px'>
                 <a href='/logs/{s['name']}?token={token}'>[logs]</a>
-                {'<a href="/channel/' + s['name'] + '?token=' + token + '" class="btn btn-primary btn-sm">Manage</a>' if not running else ''}
+                <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Manage</a>
             </p>
         </div>"""
     body = f"<h1>Farm Dashboard</h1>{msg_html}<div class='grid'>{cards}</div>"
@@ -287,6 +287,7 @@ async def channel_detail(name: str, token: str = Query(None)):
     <div class='card'>
         <h2>Actions</h2>
         <p style='margin-top:8px'>
+            <a href='/channel/{name}/edit?token={token}' class='btn btn-primary btn-sm'>⚙ Edit Config</a>
             <form action='/api/channel/{name}/start?token={token}' method='post' style='display:inline'>
                 <button type='submit' class='btn btn-primary btn-sm' {'disabled' if running else ''}>▶ Start</button>
             </form>
@@ -300,6 +301,134 @@ async def channel_detail(name: str, token: str = Query(None)):
     </div>
     <p><a href='/?token={token}'>← Back</a></p>"""
     return head(f"{name} — Ferma", token) + body + foot()
+
+
+@app.get("/channels", response_class=HTMLResponse)
+async def channels_list(token: str = Query(None)):
+    check_auth(token)
+    analytics = FarmAnalytics()
+    statuses = analytics.farm_status()
+    rows = ""
+    for s in statuses:
+        if "error" in s:
+            rows += f"<tr><td>{s['name']}</td><td colspan='5'>Error: {s['error']}</td></tr>"
+            continue
+        running = screen_running(s["name"])
+        status_tag = "<span style='color:#3fb950'>●</span>" if running else "<span style='color:#f85149'>●</span>"
+        rows += f"""<tr>
+            <td><a href='/channel/{s['name']}?token={token}'>{s['name']}</a></td>
+            <td>@{s['target']}</td>
+            <td>{status_tag} {'Running' if running else 'Stopped'}</td>
+            <td>{s['subscribers']}</td>
+            <td>{s['donors']}</td>
+            <td>{s['db']['total']}/{s['db']['published']}/{s['db']['skipped']}</td>
+            <td>
+                <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Manage</a>
+                <a href='/channel/{s['name']}/edit?token={token}' class='btn btn-warning btn-sm'>Edit</a>
+            </td>
+        </tr>"""
+    body = f"""
+    <h1>All Channels</h1>
+    <table>
+        <tr><th>Name</th><th>Target</th><th>Status</th><th>Subs</th><th>Donors</th><th>DB (T/P/S)</th><th>Actions</th></tr>
+        {rows if rows else "<tr><td colspan='7' style='text-align:center;color:#8b949e'>No channels</td></tr>"}
+    </table>
+    <p><a href='/?token={token}'>← Back</a></p>"""
+    return head("Channels — Ferma", token) + body + foot()
+
+
+@app.get("/channel/{name}/edit", response_class=HTMLResponse)
+async def edit_channel_form(name: str, token: str = Query(None)):
+    check_auth(token)
+    env_path = os.path.join(CHANNELS_DIR, name, ".env")
+    if not os.path.exists(env_path):
+        return HTMLResponse(f"Channel '{name}' not found", 404)
+
+    from dotenv import dotenv_values
+    cfg = dotenv_values(env_path)
+
+    def v(key, default=""):
+        return cfg.get(key, default)
+
+    body = f"""
+    <h1>Edit: {name}</h1>
+    <form action='/api/channel/{name}/update?token={token}' method='post'>
+        <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' value='{v("BOT_TOKEN")}' required></div>
+        <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' value='{v("TARGET_CHANNEL")}' required></div>
+        <div class='form-group'><label>SOURCE_CHANNELS (comma-separated)</label><input type='text' name='source_channels' value='{v("SOURCE_CHANNELS")}' required></div>
+        <div class='form-row'>
+            <div class='form-group'><label>PUBLISH_INTERVAL_HOURS</label><input type='number' name='publish_interval_hours' value='{v("PUBLISH_INTERVAL_HOURS", "0.5")}' step='0.1'></div>
+            <div class='form-group'><label>POSTS_PER_CYCLE</label><input type='number' name='posts_per_cycle' value='{v("POSTS_PER_CYCLE", "2")}'></div>
+        </div>
+        <div class='form-row'>
+            <div class='form-group'><label>SOURCE_LANG</label><input type='text' name='source_lang' value='{v("SOURCE_LANG", "en")}'></div>
+            <div class='form-group'><label>TARGET_LANG</label><input type='text' name='target_lang' value='{v("TARGET_LANG", "ru")}'></div>
+        </div>
+        <div class='form-group'><label>CPA_LINKS (optional, comma-separated)</label><input type='text' name='cpa_links' value='{v("CPA_LINKS")}' placeholder='https://...'></div>
+        <div class='form-row'>
+            <div class='form-group'><label>CPA_INSERT_EVERY</label><input type='number' name='cpa_insert_every' value='{v("CPA_INSERT_EVERY", "3")}'></div>
+            <div class='form-group'><label>YC_TRANSLATE_API_KEY</label><input type='text' name='yc_api_key' value='{v("YC_TRANSLATE_API_KEY")}'></div>
+        </div>
+        <div class='form-row'>
+            <div class='form-group'><label>YC_FOLDER_ID</label><input type='text' name='yc_folder_id' value='{v("YC_FOLDER_ID")}'></div>
+            <div class='form-group'><label>Restart after update</label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked></div>
+        </div>
+        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Save</button> <a href='/channel/{name}?token={token}' class='btn btn-warning'>Cancel</a></p>
+    </form>"""
+    return head(f"Edit {name} — Ferma", token) + body + foot()
+
+
+@app.post("/api/channel/{name}/update")
+async def api_update_channel(
+    name: str, token: str = Query(None),
+    bot_token: str = Form(...),
+    target_channel: str = Form(...),
+    source_channels: str = Form(...),
+    publish_interval_hours: float = Form(0.5),
+    posts_per_cycle: int = Form(2),
+    source_lang: str = Form("en"),
+    target_lang: str = Form("ru"),
+    cpa_links: str = Form(""),
+    cpa_insert_every: int = Form(3),
+    yc_api_key: str = Form(""),
+    yc_folder_id: str = Form(""),
+    restart: str = Form("0"),
+):
+    check_auth(token)
+    env_path = os.path.join(CHANNELS_DIR, name, ".env")
+    if not os.path.exists(env_path):
+        return RedirectResponse(f"/?token={token}&msg=Error%3A+channel+%27{name}%27+not+found", 302)
+
+    target = target_channel.strip().lstrip("@")
+    sources = ",".join(x.strip() for x in source_channels.split(",") if x.strip())
+    cpa_list = ",".join(x.strip() for x in cpa_links.split(",") if x.strip())
+
+    env_content = f"""BOT_TOKEN={bot_token}
+
+YC_TRANSLATE_API_KEY={yc_api_key}
+YC_FOLDER_ID={yc_folder_id}
+
+SOURCE_CHANNELS={sources}
+TARGET_CHANNEL=@{target}
+
+PUBLISH_INTERVAL_HOURS={publish_interval_hours}
+POSTS_PER_CYCLE={posts_per_cycle}
+
+SOURCE_LANG={source_lang}
+TARGET_LANG={target_lang}
+
+CPA_LINKS={cpa_list}
+CPA_INSERT_EVERY={cpa_insert_every}
+"""
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write(env_content)
+
+    if restart == "1":
+        subprocess.run(["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5)
+        _start_screen(name)
+
+    return RedirectResponse(f"/channel/{name}?token={token}", 302)
 
 
 @app.get("/logs/{name}", response_class=HTMLResponse)
