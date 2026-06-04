@@ -53,7 +53,7 @@ def run_channel(env_path: str, once: bool = False):
         print(f"[{name}] No posts with media")
         return 0
 
-    post_counter = 0
+    total_published = db.get_stats()["published"]
     for post in top_posts:
         post_id, text, has_media, media_path, score, image_url, media_type = post
 
@@ -61,11 +61,11 @@ def run_channel(env_path: str, once: bool = False):
         translated = translator.translate(text)
 
         print(f"[{name}] Publishing #{post_id}...")
-        post_counter += 1
+        total_published += 1
         success = pub.publish(
             text=translated,
             chat_id=cfg["TARGET_CHANNEL"],
-            post_counter=post_counter,
+            total_published=total_published,
             cpa_links=cfg["CPA_LINKS"],
             cpa_every=cfg["CPA_INSERT_EVERY"],
             media_path=media_path,

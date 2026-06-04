@@ -41,15 +41,15 @@ class Publisher:
         result = re.sub(r"\n{3,}", "\n\n", result)
         return result
 
-    def _inject_cpa(self, text: str, post_counter: int, cpa_links: list[str], cpa_every: int) -> str:
+    def _inject_cpa(self, text: str, total_published: int, cpa_links: list[str], cpa_every: int) -> str:
         if not cpa_links:
             return text
-        if post_counter > 0 and post_counter % cpa_every == 0:
+        if total_published > 0 and total_published % cpa_every == 0:
             link = random.choice(cpa_links).strip()
             text += f"\n\n{link}"
         return text
 
-    def publish(self, text: str, chat_id: str, post_counter: int = 0,
+    def publish(self, text: str, chat_id: str, total_published: int = 0,
                 cpa_links: list[str] = None, cpa_every: int = 3,
                 media_path: str = None, media_type: str = "photo") -> bool:
         if not self.bot_token:
@@ -57,7 +57,7 @@ class Publisher:
             return False
 
         text = self._clean_footers(text)
-        text = self._inject_cpa(text, post_counter, cpa_links or [], cpa_every)
+        text = self._inject_cpa(text, total_published, cpa_links or [], cpa_every)
 
         try:
             if not media_path:
