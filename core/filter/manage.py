@@ -20,6 +20,7 @@ DEFAULT_FILTERS = {
         "канал в мах",
         "@watcherguru",
         "watcherguru",
+        "новости | рынки | youtube",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост", "repost",
