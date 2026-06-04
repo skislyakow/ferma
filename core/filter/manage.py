@@ -18,6 +18,8 @@ DEFAULT_FILTERS = {
         "пишите ответы в комментариях",
         "пишите правильный ответ в комментариях",
         "канал в мах",
+        "@watcherguru",
+        "watcherguru",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост", "repost",
