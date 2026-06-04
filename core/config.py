@@ -24,4 +24,5 @@ def load_channel_config(env_path: str = None):
         "TARGET_LANG": env.get("TARGET_LANG", "ru"),
         "CPA_LINKS": [x.strip() for x in env.get("CPA_LINKS", "").split(",") if x.strip()],
         "CPA_INSERT_EVERY": int(env.get("CPA_INSERT_EVERY", "3")),
+        "REQUIRE_MEDIA": env.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes"),
     }

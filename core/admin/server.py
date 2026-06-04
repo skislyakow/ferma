@@ -145,6 +145,7 @@ async def add_channel_form(token: str = Query(None)):
             <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='3'></div>
             <div class='form-group'><label>Запустить после создания</label><input type='checkbox' name='start_now' value='1' style='width:auto;margin-top:8px' checked></div>
         </div>
+        <div class='form-group'><label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px'> Только посты с медиа (фото/видео)</label></div>
         <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Создать</button> <a href='/?token={token}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
     return head("Добавить канал — Ferma", token) + body + foot()
@@ -164,6 +165,7 @@ async def api_create_channel(
     cpa_links: str = Form(""),
     cpa_insert_every: int = Form(3),
     start_now: str = Form("0"),
+    require_media: str = Form("0"),
 ):
     check_auth(token)
 
@@ -202,6 +204,7 @@ TARGET_LANG={target_lang}
 
 CPA_LINKS={cpa_list}
 CPA_INSERT_EVERY={cpa_insert_every}
+REQUIRE_MEDIA={'true' if require_media == '1' else 'false'}
 """
 
     with open(env_path, "w", encoding="utf-8") as f:
@@ -243,9 +246,7 @@ async def api_delete_channel(name: str, token: str = Query(None)):
     ch_dir = os.path.join(CHANNELS_DIR, name)
     if not os.path.exists(ch_dir):
         return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302)
-
     subprocess.run(["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5)
-
     import shutil
     shutil.rmtree(ch_dir)
     return RedirectResponse(f"/?token={token}&msg=Канал+%27{name}%27+удален", 302)
@@ -341,13 +342,11 @@ async def edit_channel_form(name: str, token: str = Query(None)):
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return HTMLResponse(f"Канал '{name}' не найден", 404)
-
     from dotenv import dotenv_values
     cfg = dotenv_values(env_path)
-
     def v(key, default=""):
         return cfg.get(key, default)
-
+    rm_checked = 'checked' if cfg.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes") else ''
     body = f"""
     <h1>Настройки: {name}</h1>
     <form action='/api/channel/{name}/update?token={token}' method='post'>
@@ -369,8 +368,9 @@ async def edit_channel_form(name: str, token: str = Query(None)):
         </div>
         <div class='form-row'>
             <div class='form-group'><label>YC Folder ID</label><input type='text' name='yc_folder_id' value='{v("YC_FOLDER_ID")}'></div>
-            <div class='form-group'><label>Перезапустить после сохранения</label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked></div>
+            <div class='form-group'><label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px' {rm_checked}> Только с медиа</label></div>
         </div>
+        <div class='form-group'><label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked> Перезапустить после сохранения</label></div>
         <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Сохранить</button> <a href='/channel/{name}?token={token}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
     return head(f"Настройки {name} — Ferma", token) + body + foot()
@@ -390,17 +390,16 @@ async def api_update_channel(
     cpa_insert_every: int = Form(3),
     yc_api_key: str = Form(""),
     yc_folder_id: str = Form(""),
+    require_media: str = Form("0"),
     restart: str = Form("0"),
 ):
     check_auth(token)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302)
-
     target = target_channel.strip().lstrip("@")
     sources = ",".join(x.strip() for x in source_channels.split(",") if x.strip())
     cpa_list = ",".join(x.strip() for x in cpa_links.split(",") if x.strip())
-
     env_content = f"""BOT_TOKEN={bot_token}
 
 YC_TRANSLATE_API_KEY={yc_api_key}
@@ -417,15 +416,13 @@ TARGET_LANG={target_lang}
 
 CPA_LINKS={cpa_list}
 CPA_INSERT_EVERY={cpa_insert_every}
+REQUIRE_MEDIA={'true' if require_media == '1' else 'false'}
 """
-
     with open(env_path, "w", encoding="utf-8") as f:
         f.write(env_content)
-
     if restart == "1":
         subprocess.run(["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5)
         _start_screen(name)
-
     return RedirectResponse(f"/channel/{name}?token={token}", 302)
 
 

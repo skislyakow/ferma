@@ -42,6 +42,17 @@ def run_channel(env_path: str, once: bool = False):
         print(f"[{name}] No new posts")
         return 0
 
+    if cfg["REQUIRE_MEDIA"]:
+        before = len(top_posts)
+        top_posts = [p for p in top_posts if p[2]]
+        skipped = before - len(top_posts)
+        if skipped:
+            print(f"[{name}] Skipped {skipped} text-only posts (REQUIRE_MEDIA=1)")
+
+    if not top_posts:
+        print(f"[{name}] No posts with media")
+        return 0
+
     post_counter = 0
     for post in top_posts:
         post_id, text, has_media, media_path, score, image_url, media_type = post
