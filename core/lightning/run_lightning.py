@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from core.config import load_channel_config
 from core.lightning.collector import LightningCollector
+from core.lightning.image_gen import generate_placeholder
 from core.translator.translator import Translator
 from core.publisher.publisher import Publisher
 from core.db.database import Database
@@ -63,6 +64,26 @@ AD_BLOCKLIST = [
     "available on", "subscribe for", "sign up",
 ]
 
+SOURCE_FOOTER_PATTERNS = [
+    r"\s*[—\-–|]\s*(abc news|reuters|bbc|associated press|ap news|the guardian|cnn|npr|the hill|sky news|al jazeera|bloomberg|financial times|the economist|washington post|the independent|the telegraph|usa today|nbc news|cbs news|fox news|newsweek|time magazine)\b.*$",
+    r"\s*[—\-–|]\s*(последние новости|latest news|breaking news|news videos|video|photos?\b|фото|видео).*$",
+    r"\s*(abc news|reuters)\s*[—\-–|].*$",
+    r"^\s*(последние новости|latest news|breaking news)\s*[—\-–|]",
+]
+
+
+def strip_html(text: str) -> str:
+    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r'&[a-z]+;', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def clean_source_footer(text: str) -> str:
+    for pat in SOURCE_FOOTER_PATTERNS:
+        text = re.sub(pat, '', text, flags=re.IGNORECASE)
+    return text.strip()
+
 
 def is_blocked_content(text: str) -> bool:
     t = text.lower()
@@ -81,6 +102,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     """Shared pipeline: filter → translate → format → publish → save."""
     if not text:
         return False
+    text = strip_html(text)
     if not has_breaking_keyword(text):
         return False
     if is_blocked_content(text):
@@ -102,12 +124,25 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         print(f"[RE:POST] Translation failed or skipped")
         return False
 
+    translated = clean_source_footer(translated)
+
     lines = translated.strip().split("\n")
     headline = lines[0]
     body = "\n".join(lines[1:])
     post = format_post(headline, body)
 
     has_media = 1 if media_path else 0
+
+    # Generate placeholder image if no media
+    if not media_path:
+        try:
+            img_path = f"media/repost_banner_{source_msg_id}.png"
+            generate_placeholder(img_path, headline)
+            if os.path.exists(img_path):
+                media_path = img_path
+                media_type = "photo"
+        except Exception as e:
+            print(f"[RE:POST] Placeholder gen failed: {e}")
 
     total_published = db.get_stats()["published"]
     total_published += 1
@@ -188,6 +223,7 @@ async def rss_poller(feed_urls, cfg, translator, pub, db):
                     desc = (entry.get("description") or "").strip()
                     summary = (entry.get("summary") or "").strip()
                     text = f"{title}\n\n{desc or summary}".strip()
+                    text = strip_html(text)
 
                     if not text:
                         continue
@@ -225,7 +261,7 @@ async def main(env_path: str):
     )
 
     async def on_telegram(msg):
-        text = (msg.text or msg.message or "").strip()
+        text = strip_html((msg.text or msg.message or "").strip())
         if not text:
             return
 
