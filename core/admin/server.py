@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -76,6 +77,12 @@ def foot():
 def check_auth(token):
     if token != AUTH_TOKEN:
         raise HTTPException(401, "Invalid token")
+
+CHANNEL_NAME_RE = re.compile(r'^[a-z0-9][a-z0-9_\-]*$')
+
+def validate_channel_name(name: str):
+    if not CHANNEL_NAME_RE.match(name):
+        raise HTTPException(400, "Invalid channel name")
 
 def screen_running(name: str) -> bool:
     r = subprocess.run(
@@ -210,6 +217,8 @@ async def api_create_channel(
     check_auth(token)
 
     name = name.strip().lower().replace(" ", "_")
+    if not CHANNEL_NAME_RE.match(name):
+        return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+недопустимое+имя+канала+%27{name}%27", 302)
     ch_dir = os.path.join(CHANNELS_DIR, name)
     env_path = os.path.join(ch_dir, ".env")
 
@@ -299,6 +308,7 @@ REQUIRE_MEDIA={'true' if require_media == '1' else 'false'}
 @app.post("/api/channel/{name}/start")
 async def api_start_channel(name: str, token: str = Query(None)):
     check_auth(token)
+    validate_channel_name(name)
     _start_screen(name)
     return RedirectResponse(f"/?token={token}&msg={name}+запущен", 302)
 
@@ -306,6 +316,7 @@ async def api_start_channel(name: str, token: str = Query(None)):
 @app.post("/api/channel/{name}/stop")
 async def api_stop_channel(name: str, token: str = Query(None)):
     check_auth(token)
+    validate_channel_name(name)
     subprocess.run(["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5)
     return RedirectResponse(f"/?token={token}&msg={name}+остановлен", 302)
 
@@ -313,6 +324,7 @@ async def api_stop_channel(name: str, token: str = Query(None)):
 @app.post("/api/channel/{name}/delete")
 async def api_delete_channel(name: str, token: str = Query(None)):
     check_auth(token)
+    validate_channel_name(name)
     ch_dir = os.path.join(CHANNELS_DIR, name)
     if not os.path.exists(ch_dir):
         return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302)
@@ -325,6 +337,7 @@ async def api_delete_channel(name: str, token: str = Query(None)):
 @app.get("/channel/{name}", response_class=HTMLResponse)
 async def channel_detail(name: str, token: str = Query(None)):
     check_auth(token)
+    validate_channel_name(name)
     analytics = FarmAnalytics()
     s = analytics.channel_stats(name)
     if "error" in s:
@@ -421,6 +434,7 @@ async def channels_list(token: str = Query(None)):
 @app.get("/channel/{name}/edit", response_class=HTMLResponse)
 async def edit_channel_form(name: str, token: str = Query(None)):
     check_auth(token)
+    validate_channel_name(name)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return HTMLResponse(f"Канал '{name}' не найден", 404)
@@ -496,6 +510,7 @@ async def api_update_channel(
     rss_feeds: str = Form(""),
 ):
     check_auth(token)
+    validate_channel_name(name)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return RedirectResponse(f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302)
@@ -562,6 +577,7 @@ REQUIRE_MEDIA={'true' if require_media == '1' else 'false'}
 @app.get("/logs/{name}", response_class=HTMLResponse)
 async def view_logs(name: str, lines: int = 50, token: str = Query(None)):
     check_auth(token)
+    validate_channel_name(name)
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
     if not os.path.exists(log_path):
         return HTMLResponse(f"Нет логов для '{name}'", 404)
@@ -651,6 +667,8 @@ def _get_default_yc_keys() -> dict:
 
 
 def _start_screen(name: str):
+    if not CHANNEL_NAME_RE.match(name):
+        return
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return
