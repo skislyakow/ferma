@@ -27,11 +27,15 @@ class FarmAnalytics:
         token = cfg.get("BOT_TOKEN", "")
         target = cfg.get("TARGET_CHANNEL", "").lstrip("@")
         donors = cfg.get("SOURCE_CHANNELS", "").split(",")
+        chan_type = cfg.get("CHANNEL_TYPE", "normal")
+        rss_feeds = [x.strip() for x in cfg.get("RSS_FEEDS", "").split(",") if x.strip()]
 
         result = {
             "name": name,
             "target": target,
+            "type": chan_type,
             "donors": len([d for d in donors if d.strip()]),
+            "rss_feeds": rss_feeds,
             "subscribers": 0,
             "last_posts": [],
             "db": {"total": 0, "published": 0, "skipped": 0, "video": 0},

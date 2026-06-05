@@ -58,7 +58,16 @@ form { max-width:600px; }
 """
 
 def head(title, token):
-    return f"""<!DOCTYPE html><html lang='ru'><head><meta charset='utf-8'><title>{title}</title><style>{CSS}</style></head><body>
+    return f"""<!DOCTYPE html><html lang='ru'><head><meta charset='utf-8'><title>{title}</title><style>{CSS}</style>
+<script>
+function toggleType() {{
+    var t = document.getElementById('channel_type');
+    var isLightning = t.value === 'lightning';
+    document.getElementById('normal_fields').style.display = isLightning ? 'none' : 'block';
+    document.getElementById('lightning_fields').style.display = isLightning ? 'block' : 'none';
+}}
+</script>
+</head><body>
 <div class='nav'><a href='/?token={token}'>Панель</a><a href='/channels?token={token}'>Каналы</a><a href='/filters?token={token}'>Фильтры</a><a href='/add?token={token}'>+ Добавить канал</a></div>"""
 
 def foot():
@@ -103,12 +112,19 @@ async def dashboard(token: str = Query(None), msg: str = None):
             continue
         running = screen_running(s["name"])
         status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
+        chan_type = s.get('type', 'normal')
+        type_tag = "⚡️ Lightning" if chan_type == 'lightning' else "📰 Normal"
+        extra = ""
+        if chan_type == 'lightning':
+            rss = s.get('rss_feeds', [])
+            extra = f"<div class='stat'><span class='label'>RSS фидов</span><span class='value'>{len(rss)}</span></div>"
         cards += f"""
         <div class='card'>
-            <h2 style='margin-top:0'><a href='/channel/{s['name']}?token={token}'>{s['name']}</a> <span style='float:right;font-size:13px;color:#8b949e'>@{s['target']}</span></h2>
+            <h2 style='margin-top:0'><a href='/channel/{s['name']}?token={token}'>{s['name']}</a> <span style='float:right;font-size:13px;color:#8b949e'>{type_tag}</span></h2>
             <div class='stat'><span class='label'>Статус</span><span class='value'>{status_tag}</span></div>
             <div class='stat'><span class='label'>Подписчики</span><span class='value'>{s['subscribers']}</span></div>
             <div class='stat'><span class='label'>Доноры</span><span class='value'>{s['donors']}</span></div>
+            {extra}
             <div class='stat'><span class='label'>БД всего</span><span class='value'>{s['db']['total']}</span></div>
             <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s['db']['published']}</span></div>
             <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s['db']['skipped']}</span></div>
@@ -129,12 +145,32 @@ async def add_channel_form(token: str = Query(None)):
     <h1>Добавить канал</h1>
     <form action='/api/channel/create?token={token}' method='post'>
         <div class='form-group'><label>Название (папка)</label><input type='text' name='name' placeholder='например: tech' required></div>
-        <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required></div>
-        <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@moy_kal' required></div>
-        <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@donor1,@donor2' required></div>
-        <div class='form-row'>
-            <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='0.5' step='0.1'></div>
-            <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='2'></div>
+        <div class='form-group'><label>Тип канала</label>
+            <select name='channel_type' id='channel_type' onchange='toggleType()' required>
+                <option value='normal'>Normal (Telethon + парсер)</option>
+                <option value='lightning'>Lightning / RE:POST (Telethon polling + RSS)</option>
+            </select>
+        </div>
+        <div id='normal_fields'>
+            <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required></div>
+            <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@moy_kal' required></div>
+            <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@donor1,@donor2' required></div>
+            <div class='form-row'>
+                <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='0.5' step='0.1'></div>
+                <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='2'></div>
+            </div>
+            <div class='form-group'><label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px'> Только посты с медиа (фото/видео)</label></div>
+        </div>
+        <div id='lightning_fields' style='display:none'>
+            <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required></div>
+            <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@yourrepost' required></div>
+            <div class='form-group'><label>Telegram доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@WatcherGuru,@BNONews' required></div>
+            <div class='form-row'>
+                <div class='form-group'><label>TELEGRAM_API_ID</label><input type='text' name='api_id' placeholder='12345' required></div>
+                <div class='form-group'><label>TELEGRAM_API_HASH</label><input type='text' name='api_hash' placeholder='abc123...' required></div>
+            </div>
+            <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' placeholder='+79001234567' required></div>
+            <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' placeholder='https://feeds.bbci.co.uk/news/rss.xml,...'></div>
         </div>
         <div class='form-row'>
             <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='en'></div>
@@ -145,7 +181,6 @@ async def add_channel_form(token: str = Query(None)):
             <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='3'></div>
             <div class='form-group'><label>Запустить после создания</label><input type='checkbox' name='start_now' value='1' style='width:auto;margin-top:8px' checked></div>
         </div>
-        <div class='form-group'><label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px'> Только посты с медиа (фото/видео)</label></div>
         <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Создать</button> <a href='/?token={token}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
     return head("Добавить канал — Ferma", token) + body + foot()
@@ -155,6 +190,7 @@ async def add_channel_form(token: str = Query(None)):
 async def api_create_channel(
     token: str = Query(None),
     name: str = Form(...),
+    channel_type: str = Form("normal"),
     bot_token: str = Form(...),
     target_channel: str = Form(...),
     source_channels: str = Form(...),
@@ -166,6 +202,10 @@ async def api_create_channel(
     cpa_insert_every: int = Form(3),
     start_now: str = Form("0"),
     require_media: str = Form("0"),
+    api_id: str = Form(""),
+    api_hash: str = Form(""),
+    phone: str = Form(""),
+    rss_feeds: str = Form(""),
 ):
     check_auth(token)
 
@@ -187,9 +227,39 @@ async def api_create_channel(
 
     cpa_list = ",".join(x.strip() for x in cpa_links.split(",") if x.strip())
 
-    env_content = f"""BOT_TOKEN={bot_token}
+    is_lightning = channel_type == "lightning"
+    rss_list = ",".join(x.strip() for x in rss_feeds.split(",") if x.strip())
 
-# Yandex Translate (optional - uses defaults from other channels)
+    if is_lightning:
+        env_content = f"""# RE:POST — Lightning News Channel
+CHANNEL_TYPE=lightning
+TELEGRAM_API_ID={api_id}
+TELEGRAM_API_HASH={api_hash}
+TELEGRAM_PHONE={phone}
+
+YC_TRANSLATE_API_KEY=
+YC_FOLDER_ID=
+
+BOT_TOKEN={bot_token}
+
+SOURCE_CHANNELS={sources}
+TARGET_CHANNEL=@{target}
+
+PUBLISH_INTERVAL_HOURS=0
+POSTS_PER_CYCLE=0
+
+SOURCE_LANG={source_lang}
+TARGET_LANG={target_lang}
+
+CPA_LINKS={cpa_list}
+CPA_INSERT_EVERY={cpa_insert_every}
+RSS_FEEDS={rss_list}
+"""
+    else:
+        env_content = f"""# Normal channel
+CHANNEL_TYPE=normal
+BOT_TOKEN={bot_token}
+
 YC_TRANSLATE_API_KEY=
 YC_FOLDER_ID=
 
@@ -264,14 +334,26 @@ async def channel_detail(name: str, token: str = Query(None)):
         posts += f"<div class='stat'><span class='label'>#{p['id']} {p['date'][:16]}</span><span class='value'>👁 {p['views']} 💬 {p['reactions']}</span></div>"
     running = screen_running(name)
     status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
+    chan_type = s.get('type', 'normal')
+    type_tag = "⚡️ Lightning" if chan_type == 'lightning' else "📰 Normal"
+    extra_stats = ""
+    if chan_type == 'lightning':
+        rss = s.get('rss_feeds', [])
+        tele_donors = s.get('donors', 0)
+        extra_stats = f"""
+            <div class='stat'><span class='label'>Telegram доноры</span><span class='value'>{tele_donors}</span></div>
+            <div class='stat'><span class='label'>RSS фиды</span><span class='value'>{len(rss)}</span></div>
+        """
+        if rss:
+            extra_stats += "<div class='stat'><span class='label' style='align-self:start'>RSS источники</span><span class='value' style='font-size:12px'>" + "<br>".join(rss) + "</span></div>"
     body = f"""
-    <h1>{s['name']} <span style='font-size:14px;color:#8b949e'>@{s['target']}</span></h1>
+    <h1>{s['name']} <span style='font-size:14px;color:#8b949e'>@{s['target']} {type_tag}</span></h1>
     <div class='grid'>
         <div class='card'>
             <h2>Статистика</h2>
             <div class='stat'><span class='label'>Статус</span><span class='value'>{status_tag}</span></div>
             <div class='stat'><span class='label'>Подписчики</span><span class='value'>{s['subscribers']}</span></div>
-            <div class='stat'><span class='label'>Доноры</span><span class='value'>{s['donors']}</span></div>
+            {extra_stats}
             <div class='stat'><span class='label'>БД всего</span><span class='value'>{s['db']['total']}</span></div>
             <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s['db']['published']}</span></div>
             <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s['db']['skipped']}</span></div>
@@ -346,29 +428,44 @@ async def edit_channel_form(name: str, token: str = Query(None)):
     cfg = dotenv_values(env_path)
     def v(key, default=""):
         return cfg.get(key, default)
+    is_lightning = cfg.get("CHANNEL_TYPE", "") == "lightning"
     rm_checked = 'checked' if cfg.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes") else ''
     body = f"""
-    <h1>Настройки: {name}</h1>
+    <h1>Настройки: {name} <span style='font-size:14px;color:#8b949e'>{'⚡️ Lightning' if is_lightning else '📰 Normal'}</span></h1>
     <form action='/api/channel/{name}/update?token={token}' method='post'>
+        <input type='hidden' name='channel_type' value='{'lightning' if is_lightning else 'normal'}'>
         <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' value='{v("BOT_TOKEN")}' required></div>
         <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' value='{v("TARGET_CHANNEL")}' required></div>
         <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' value='{v("SOURCE_CHANNELS")}' required></div>
+        {'' if not is_lightning else '''
         <div class='form-row'>
-            <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='{v("PUBLISH_INTERVAL_HOURS", "0.5")}' step='0.1'></div>
-            <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='{v("POSTS_PER_CYCLE", "2")}'></div>
+            <div class='form-group'><label>TELEGRAM_API_ID</label><input type='text' name='api_id' value='{}'></div>
+            <div class='form-group'><label>TELEGRAM_API_HASH</label><input type='text' name='api_hash' value='{}'></div>
         </div>
+        <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' value='{}'></div>
+        <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' value='{}'></div>
+        '''.format(
+            v("TELEGRAM_API_ID"), v("TELEGRAM_API_HASH"),
+            v("TELEGRAM_PHONE"), v("RSS_FEEDS")
+        )}
         <div class='form-row'>
             <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='{v("SOURCE_LANG", "en")}'></div>
             <div class='form-group'><label>Язык перевода</label><input type='text' name='target_lang' value='{v("TARGET_LANG", "ru")}'></div>
         </div>
-        <div class='form-group'><label>CPA-ссылки (опционально, через запятую)</label><input type='text' name='cpa_links' value='{v("CPA_LINKS")}' placeholder='https://...'></div>
+        <div class='form-row'>
+            <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='{v("PUBLISH_INTERVAL_HOURS", "0.5")}' step='0.1'></div>
+            <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='{v("POSTS_PER_CYCLE", "2")}'></div>
+        </div>
+        <div class='form-group'>
+            <label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px' {rm_checked}> Только с медиа</label>
+        </div>
+        <div class='form-group'><label>CPA-ссылки (через запятую)</label><input type='text' name='cpa_links' value='{v("CPA_LINKS")}' placeholder='https://...'></div>
         <div class='form-row'>
             <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='{v("CPA_INSERT_EVERY", "3")}'></div>
             <div class='form-group'><label>YC ключ перевода</label><input type='text' name='yc_api_key' value='{v("YC_TRANSLATE_API_KEY")}'></div>
         </div>
         <div class='form-row'>
             <div class='form-group'><label>YC Folder ID</label><input type='text' name='yc_folder_id' value='{v("YC_FOLDER_ID")}'></div>
-            <div class='form-group'><label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px' {rm_checked}> Только с медиа</label></div>
         </div>
         <div class='form-group'><label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked> Перезапустить после сохранения</label></div>
         <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Сохранить</button> <a href='/channel/{name}?token={token}' class='btn btn-warning'>Отмена</a></p>
@@ -379,6 +476,7 @@ async def edit_channel_form(name: str, token: str = Query(None)):
 @app.post("/api/channel/{name}/update")
 async def api_update_channel(
     name: str, token: str = Query(None),
+    channel_type: str = Form("normal"),
     bot_token: str = Form(...),
     target_channel: str = Form(...),
     source_channels: str = Form(...),
@@ -392,6 +490,10 @@ async def api_update_channel(
     yc_folder_id: str = Form(""),
     require_media: str = Form("0"),
     restart: str = Form("0"),
+    api_id: str = Form(""),
+    api_hash: str = Form(""),
+    phone: str = Form(""),
+    rss_feeds: str = Form(""),
 ):
     check_auth(token)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
@@ -400,7 +502,38 @@ async def api_update_channel(
     target = target_channel.strip().lstrip("@")
     sources = ",".join(x.strip() for x in source_channels.split(",") if x.strip())
     cpa_list = ",".join(x.strip() for x in cpa_links.split(",") if x.strip())
-    env_content = f"""BOT_TOKEN={bot_token}
+    rss_list = ",".join(x.strip() for x in rss_feeds.split(",") if x.strip())
+    is_lightning = channel_type == "lightning"
+
+    if is_lightning:
+        env_content = f"""# RE:POST — Lightning News Channel
+CHANNEL_TYPE=lightning
+TELEGRAM_API_ID={api_id}
+TELEGRAM_API_HASH={api_hash}
+TELEGRAM_PHONE={phone}
+
+YC_TRANSLATE_API_KEY={yc_api_key}
+YC_FOLDER_ID={yc_folder_id}
+
+BOT_TOKEN={bot_token}
+
+SOURCE_CHANNELS={sources}
+TARGET_CHANNEL=@{target}
+
+PUBLISH_INTERVAL_HOURS=0
+POSTS_PER_CYCLE=0
+
+SOURCE_LANG={source_lang}
+TARGET_LANG={target_lang}
+
+CPA_LINKS={cpa_list}
+CPA_INSERT_EVERY={cpa_insert_every}
+RSS_FEEDS={rss_list}
+"""
+    else:
+        env_content = f"""# Normal channel
+CHANNEL_TYPE=normal
+BOT_TOKEN={bot_token}
 
 YC_TRANSLATE_API_KEY={yc_api_key}
 YC_FOLDER_ID={yc_folder_id}
@@ -450,7 +583,7 @@ async def filters_page(token: str = Query(None), msg: str = None):
         msg_html = f"<div class='{cls}'>{msg}</div>"
     groups = {
         "footer_patterns": "Футеры (строки с этой фразой удаляются из текста)",
-        "ad_keywords": "Рекламные слова (2+ совпадения = пост заблокирован)",
+        "ad_keywords": "Рекламные слова (1+ совпадение = пост заблокирован)",
         "external_source_patterns": "Внешние источники (пост блокируется)",
         "teaser_patterns": "Тизеры/списки (пост блокируется)",
     }
@@ -521,12 +654,17 @@ def _start_screen(name: str):
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return
-    log_dir = os.path.join(FARM_DIR, "logs")
-    os.makedirs(log_dir, exist_ok=True)
+    from dotenv import dotenv_values
+    cfg = dotenv_values(env_path)
+    is_lightning = cfg.get("CHANNEL_TYPE", "") == "lightning"
+    log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
+    if is_lightning:
+        entry = f"core/lightning/run_lightning.py {env_path}"
+    else:
+        entry = f"core/run_channel.py {env_path}"
     cmd = (
         f"cd {FARM_DIR} && screen -dmS {name} bash -c "
-        f'"mkdir -p logs && PYTHONUNBUFFERED=1 exec {PYTHON} -u '
-        f"core/run_channel.py {env_path} 2>&1 | tee -a logs/{name}.log\""
+        f'"PYTHONUNBUFFERED=1 exec {PYTHON} -u {entry} > {log_path} 2>&1"'
     )
     subprocess.run(cmd, shell=True, capture_output=True, timeout=10)
 
