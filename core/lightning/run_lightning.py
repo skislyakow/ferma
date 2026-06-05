@@ -14,6 +14,8 @@ import zlib
 import re
 import asyncio
 
+from dotenv import dotenv_values
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from core.config import load_channel_config
@@ -140,13 +142,9 @@ async def auth_once(env_path: str, code: str = None):
     await client.disconnect()
 
 
-async def rss_poller(cfg, translator, pub, db):
+async def rss_poller(feed_urls, cfg, translator, pub, db):
     """Poll RSS feeds for breaking news."""
     import feedparser
-
-    from dotenv import dotenv_values
-    env_vars = dotenv_values(os.path.abspath(sys.argv[1]))
-    feed_urls = [x.strip() for x in env_vars.get("RSS_FEEDS", "").split(",") if x.strip()]
 
     if not feed_urls:
         return
@@ -233,12 +231,16 @@ async def main(env_path: str):
     async def run_telegram():
         await collector.start(cfg["SOURCE_CHANNELS"])
 
+    # Parse RSS feeds from .env
+    rss_feeds = [x.strip() for x in dotenv_values(env_path).get("RSS_FEEDS", "").split(",") if x.strip()]
+
     tasks.append(asyncio.create_task(run_telegram()))
-    tasks.append(asyncio.create_task(rss_poller(cfg, translator, pub, db)))
+    if rss_feeds:
+        tasks.append(asyncio.create_task(rss_poller(rss_feeds, cfg, translator, pub, db)))
 
     print(f"[RE:POST] === RE:POST ===")
     print(f"[RE:POST] Target: {cfg['TARGET_CHANNEL']}")
-    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + RSS")
+    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS feeds")
     print(f"[RE:POST] Running...")
 
     await asyncio.gather(*tasks)
