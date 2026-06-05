@@ -21,6 +21,9 @@ DEFAULT_FILTERS = {
         "@watcherguru",
         "watcherguru",
         "новости | рынки | youtube",
+        "следите за новостями на",
+        "@insiderpaper",
+        "insiderpaper",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост", "repost",
