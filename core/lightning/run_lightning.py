@@ -134,6 +134,22 @@ async def main(env_path: str):
         body = "\n".join(lines[1:])
         post = format_post(headline, body)
 
+        media_path = None
+        media_type = "photo"
+        has_media = 0
+
+        if msg.photo:
+            try:
+                os.makedirs("media", exist_ok=True)
+                fname = f"repost_{source_msg_id}.jpg"
+                path = await msg.download_media(file=f"media/{fname}")
+                if path and os.path.exists(path):
+                    media_path = path
+                    has_media = 1
+                    print(f"[Lightning] Downloaded photo: {fname}")
+            except Exception as e:
+                print(f"[Lightning] Media download failed: {e}")
+
         total_published = db.get_stats()["published"]
         total_published += 1
 
@@ -143,6 +159,8 @@ async def main(env_path: str):
             total_published=total_published,
             cpa_links=cfg["CPA_LINKS"],
             cpa_every=cfg["CPA_INSERT_EVERY"],
+            media_path=media_path,
+            media_type=media_type,
         )
 
         if success:
@@ -152,7 +170,7 @@ async def main(env_path: str):
                 text=text,
                 views=0,
                 reactions_count=0,
-                has_media=0,
+                has_media=has_media,
                 published=1,
             )
             print(f"[Lightning] Published: {headline[:50]}")
