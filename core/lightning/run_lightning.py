@@ -23,6 +23,7 @@ from core.lightning.collector import LightningCollector
 from core.translator.translator import Translator
 from core.publisher.publisher import Publisher
 from core.db.database import Database
+from core.filter.manage import load_filters
 
 BREAKING_KEYWORDS = [
     "breaking", "just in", "alert", "update", "developing",
@@ -56,12 +57,34 @@ def make_text_hash(text: str) -> str:
     return hashlib.md5(text[:200].encode("utf-8")).hexdigest()
 
 
+AD_BLOCKLIST = [
+    "news app", "follow news", "match your interests",
+    "download the app", "download our app", "get the app",
+    "available on", "subscribe for", "sign up",
+]
+
+
+def is_blocked_content(text: str) -> bool:
+    t = text.lower()
+    f = load_filters()
+    for kw in f.get("ad_keywords", []) + f.get("teaser_patterns", []):
+        if kw in t:
+            return True
+    for pat in AD_BLOCKLIST:
+        if pat in t:
+            return True
+    return False
+
+
 async def process_news(source_channel: str, source_msg_id: int, text: str,
                        translator, pub, db, cfg, media_path=None, media_type="photo"):
     """Shared pipeline: filter → translate → format → publish → save."""
     if not text:
         return False
     if not has_breaking_keyword(text):
+        return False
+    if is_blocked_content(text):
+        print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
         return False
 
     if db.post_exists(source_channel, source_msg_id):

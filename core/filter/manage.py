@@ -36,6 +36,8 @@ DEFAULT_FILTERS = {
         "фрагмент", "аукцион", "prime",
         "реклам",
         "#sponsored", "#ad", "#реклама",
+        "news app", "download the app", "get the app",
+        "follow news", "match your interests",
     ],
     "external_source_patterns": [
         "читайте на", "читайте в", "подробнее на", "подробнее в",
