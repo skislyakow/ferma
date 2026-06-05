@@ -32,6 +32,7 @@ BREAKING_KEYWORDS = [
     "🚨", "🔴", "⚠️", "‼️",
 ]
 
+REPOST_BANNER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "repost.png")
 SESSION_FILE = "repost.session"
 
 
@@ -131,6 +132,11 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     post = format_post(headline, body)
 
     has_media = 1 if media_path else 0
+
+    # Use repost.png as fallback image
+    if not media_path and os.path.exists(REPOST_BANNER):
+        media_path = REPOST_BANNER
+        media_type = "photo"
 
     total_published = db.get_stats()["published"]
     total_published += 1
