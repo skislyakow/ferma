@@ -59,6 +59,10 @@ def run_channel(env_path: str, once: bool = False):
 
         print(f"[{name}] Translating #{post_id}...")
         translated = translator.translate(text)
+        if not translated or translated == text:
+            print(f"[{name}] Translation failed or skipped for #{post_id}, marking as skipped")
+            db.mark_skipped(post_id)
+            continue
 
         print(f"[{name}] Publishing #{post_id}...")
         total_published += 1

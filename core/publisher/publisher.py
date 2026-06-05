@@ -67,6 +67,7 @@ class Publisher:
                     "text": text,
                     "disable_web_page_preview": False,
                 }, timeout=15)
+                sent_type = "text"
             elif media_type == "video":
                 if len(text) > 1024:
                     print("[Publisher] Text too long for video caption, skipping")
@@ -78,6 +79,7 @@ class Publisher:
                         "caption": text,
                         "supports_streaming": True,
                     }, files={"video": video}, timeout=120)
+                sent_type = "video"
             else:
                 if len(text) > 1024:
                     print("[Publisher] Text too long for photo caption, skipping image")
@@ -87,6 +89,7 @@ class Publisher:
                         "text": text,
                         "disable_web_page_preview": False,
                     }, timeout=15)
+                    sent_type = "text (photo fallback)"
                 else:
                     url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
                     with open(media_path, 'rb') as photo:
@@ -94,9 +97,10 @@ class Publisher:
                             "chat_id": chat_id,
                             "caption": text,
                         }, files={"photo": photo}, timeout=30)
+                    sent_type = "photo"
 
             resp.raise_for_status()
-            print(f"[Publisher] OK ({media_type})")
+            print(f"[Publisher] OK ({sent_type})")
             self._cleanup_media(media_path)
             return True
         except Exception as e:
