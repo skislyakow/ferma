@@ -99,6 +99,7 @@ async def main(env_path: str):
         api_hash=cfg["API_HASH"],
         phone=cfg["PHONE"],
         session_path=SESSION_FILE,
+        poll_interval=30,
     )
 
     async def on_message(msg):
