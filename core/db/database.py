@@ -72,14 +72,14 @@ class Database:
             ).fetchone()
             return row is not None
 
-    def save_post(self, source_channel, source_message_id, text, views, reactions_count, has_media, media_path=None, image_url=None, media_type="photo"):
+    def save_post(self, source_channel, source_message_id, text, views, reactions_count, has_media, media_path=None, image_url=None, media_type="photo", published=0):
         text_hash = self.make_text_hash(text)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR IGNORE INTO posts
-                (source_channel, source_message_id, text, text_hash, views, reactions_count, has_media, media_path, image_url, media_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (source_channel, source_message_id, text, text_hash, views, reactions_count, int(has_media), media_path, image_url, media_type),
+                (source_channel, source_message_id, text, text_hash, views, reactions_count, has_media, media_path, image_url, media_type, published)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (source_channel, source_message_id, text, text_hash, views, reactions_count, int(has_media), media_path, image_url, media_type, published),
             )
 
     def get_unpublished_posts(self, limit=5):
