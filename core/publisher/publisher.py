@@ -65,7 +65,6 @@ class Publisher:
                 resp = requests.post(url, json={
                     "chat_id": chat_id,
                     "text": text,
-                    "parse_mode": "HTML",
                     "disable_web_page_preview": False,
                 }, timeout=15)
             elif media_type == "video":
@@ -77,7 +76,6 @@ class Publisher:
                     resp = requests.post(url, data={
                         "chat_id": chat_id,
                         "caption": text,
-                        "parse_mode": "HTML",
                         "supports_streaming": True,
                     }, files={"video": video}, timeout=120)
             else:
@@ -87,7 +85,6 @@ class Publisher:
                     resp = requests.post(url, json={
                         "chat_id": chat_id,
                         "text": text,
-                        "parse_mode": "HTML",
                         "disable_web_page_preview": False,
                     }, timeout=15)
                 else:
@@ -96,7 +93,6 @@ class Publisher:
                         resp = requests.post(url, data={
                             "chat_id": chat_id,
                             "caption": text,
-                            "parse_mode": "HTML",
                         }, files={"photo": photo}, timeout=30)
 
             resp.raise_for_status()
