@@ -32,7 +32,8 @@ BREAKING_KEYWORDS = [
     "🚨", "🔴", "⚠️", "‼️",
 ]
 
-REPOST_BANNER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "repost.png")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPOST_BANNER = os.path.join(PROJECT_ROOT, "repost.png")
 SESSION_FILE = "repost.session"
 
 
@@ -125,6 +126,10 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         return False
 
     translated = clean_source_footer(translated)
+
+    if not translated.strip():
+        print(f"[RE:POST] Empty after footer cleaning, skipping")
+        return False
 
     lines = translated.strip().split("\n")
     headline = lines[0]

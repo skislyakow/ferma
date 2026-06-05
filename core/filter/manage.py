@@ -26,7 +26,7 @@ DEFAULT_FILTERS = {
         "insiderpaper",
     ],
     "ad_keywords": [
-        "ретвит", "retweet", "репост", "repost",
+        "ретвит", "retweet", "репост",
         "десант", "страница десант",
         "никогда не платите", "never pay",
         "предпродаж", "presale",
