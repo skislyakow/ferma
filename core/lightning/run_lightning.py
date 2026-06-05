@@ -1,15 +1,16 @@
 """
 RE:POST — Lightning News Channel.
-Real-time Telethon listener → keyword filter → Yandex Translate → Bot API publish.
+Telegram (Telethon) + RSS → keyword filter → Yandex Translate → Bot API publish.
 
 Usage:
   1) Request code:     python core/lightning/run_lightning.py channels/repost/.env --auth
   2) Complete auth:    python core/lightning/run_lightning.py channels/repost/.env --auth 12345
-  3) Run in screen:    python core/lightning/run_lightning.py channels/repost/.env
+  3) Run:              python core/lightning/run_lightning.py channels/repost/.env
 """
 import os
 import sys
 import hashlib
+import zlib
 import re
 import asyncio
 
@@ -53,35 +54,132 @@ def make_text_hash(text: str) -> str:
     return hashlib.md5(text[:200].encode("utf-8")).hexdigest()
 
 
+async def process_news(source_channel: str, source_msg_id: int, text: str,
+                       translator, pub, db, cfg, media_path=None, media_type="photo"):
+    """Shared pipeline: filter → translate → format → publish → save."""
+    if not text:
+        return False
+    if not has_breaking_keyword(text):
+        return False
+
+    if db.post_exists(source_channel, source_msg_id):
+        print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
+        return False
+
+    if db.content_exists(text):
+        print(f"[RE:POST] Duplicate content (hash match)")
+        return False
+
+    print(f"[RE:POST] >> {text[:80]}...")
+
+    translated = translator.translate(text)
+    if not translated or translated == text:
+        print(f"[RE:POST] Translation failed or skipped")
+        return False
+
+    lines = translated.strip().split("\n")
+    headline = lines[0]
+    body = "\n".join(lines[1:])
+    post = format_post(headline, body)
+
+    has_media = 1 if media_path else 0
+
+    total_published = db.get_stats()["published"]
+    total_published += 1
+
+    success = pub.publish(
+        text=post,
+        chat_id=cfg["TARGET_CHANNEL"],
+        total_published=total_published,
+        cpa_links=cfg["CPA_LINKS"],
+        cpa_every=cfg["CPA_INSERT_EVERY"],
+        media_path=media_path,
+        media_type=media_type,
+    )
+
+    if success:
+        db.save_post(
+            source_channel=source_channel,
+            source_message_id=source_msg_id,
+            text=text,
+            views=0,
+            reactions_count=0,
+            has_media=has_media,
+            published=1,
+        )
+        print(f"[RE:POST] Published: {headline[:50]}")
+    return success
+
+
 async def auth_once(env_path: str, code: str = None):
     channel_dir = os.path.dirname(os.path.abspath(env_path))
     os.chdir(channel_dir)
     cfg = load_channel_config(env_path)
+    from telethon import TelegramClient
     client = TelegramClient(SESSION_FILE, cfg["API_ID"], cfg["API_HASH"])
     await client.connect()
 
     if await client.is_user_authorized():
-        print("[Lightning] Already authorized")
-
+        print("[RE:POST] Already authorized")
     elif code:
         state_path = ".auth_state"
         if not os.path.exists(state_path):
-            print(f"[Lightning] Run --auth first (without code) to request code")
+            print("[RE:POST] Run --auth first (without code) to request code")
             return
         with open(state_path) as f:
             phone_code_hash = f.read().strip()
         await client.sign_in(phone=cfg["PHONE"], code=code, phone_code_hash=phone_code_hash)
         os.remove(state_path)
-        print("[Lightning] Auth successful, session saved")
-
+        print("[RE:POST] Auth successful, session saved")
     else:
         sent = await client.send_code_request(cfg["PHONE"])
         with open(".auth_state", "w") as f:
             f.write(sent.phone_code_hash)
-        print(f"[Lightning] Code sent to {cfg['PHONE']}")
-        print(f"[Lightning] Run --auth <code> to complete")
-
+        print(f"[RE:POST] Code sent to {cfg['PHONE']}")
+        print(f"[RE:POST] Run --auth <code> to complete")
     await client.disconnect()
+
+
+async def rss_poller(cfg, translator, pub, db):
+    """Poll RSS feeds for breaking news."""
+    import feedparser
+
+    from dotenv import dotenv_values
+    env_vars = dotenv_values(os.path.abspath(sys.argv[1]))
+    feed_urls = [x.strip() for x in env_vars.get("RSS_FEEDS", "").split(",") if x.strip()]
+
+    if not feed_urls:
+        return
+
+    seen = set()
+    print(f"[RSS] Monitoring {len(feed_urls)} feeds...")
+
+    while True:
+        for url in feed_urls:
+            try:
+                feed = feedparser.parse(url)
+                for entry in reversed(feed.entries):
+                    link = entry.get("link") or entry.get("id", "")
+                    if not link or link in seen:
+                        continue
+
+                    title = (entry.get("title") or "").strip()
+                    desc = (entry.get("description") or "").strip()
+                    summary = (entry.get("summary") or "").strip()
+                    text = f"{title}\n\n{desc or summary}".strip()
+
+                    if not text:
+                        continue
+
+                    seen.add(link)
+                    msg_id = zlib.crc32(link.encode()) & 0x7FFFFFFF
+                    await process_news(f"rss:{url.split('/')[2]}", msg_id, text,
+                                       translator, pub, db, cfg)
+
+            except Exception as e:
+                print(f"[RSS] Error: {e}")
+
+        await asyncio.sleep(120)
 
 
 async def main(env_path: str):
@@ -94,6 +192,9 @@ async def main(env_path: str):
     pub = Publisher()
     pub.set_token(cfg["BOT_TOKEN"])
 
+    tasks = []
+
+    # Start Telegram collector
     collector = LightningCollector(
         api_id=cfg["API_ID"],
         api_hash=cfg["API_HASH"],
@@ -102,41 +203,16 @@ async def main(env_path: str):
         poll_interval=30,
     )
 
-    async def on_message(msg):
+    async def on_telegram(msg):
         text = (msg.text or msg.message or "").strip()
         if not text:
-            return
-
-        if not has_breaking_keyword(text):
             return
 
         source_channel = getattr(msg.chat, "username", "") or str(msg.chat.id)
         source_msg_id = msg.id
 
-        if db.post_exists(source_channel, source_msg_id):
-            print(f"[Lightning] Duplicate message #{source_msg_id} from {source_channel}")
-            return
-
-        text_hash = make_text_hash(text)
-        if db.content_exists(text):
-            print(f"[Lightning] Duplicate content (hash match)")
-            return
-
-        print(f"[Lightning] >> {text[:80]}...")
-
-        translated = translator.translate(text)
-        if not translated or translated == text:
-            print(f"[Lightning] Translation failed or skipped")
-            return
-
-        lines = translated.strip().split("\n")
-        headline = lines[0]
-        body = "\n".join(lines[1:])
-        post = format_post(headline, body)
-
         media_path = None
         media_type = "photo"
-        has_media = 0
 
         if msg.photo:
             try:
@@ -145,44 +221,27 @@ async def main(env_path: str):
                 path = await msg.download_media(file=f"media/{fname}")
                 if path and os.path.exists(path):
                     media_path = path
-                    has_media = 1
-                    print(f"[Lightning] Downloaded photo: {fname}")
             except Exception as e:
-                print(f"[Lightning] Media download failed: {e}")
+                print(f"[RE:POST] Media download failed: {e}")
 
-        total_published = db.get_stats()["published"]
-        total_published += 1
+        await process_news(source_channel, source_msg_id, text,
+                           translator, pub, db, cfg,
+                           media_path=media_path, media_type=media_type)
 
-        success = pub.publish(
-            text=post,
-            chat_id=cfg["TARGET_CHANNEL"],
-            total_published=total_published,
-            cpa_links=cfg["CPA_LINKS"],
-            cpa_every=cfg["CPA_INSERT_EVERY"],
-            media_path=media_path,
-            media_type=media_type,
-        )
+    collector.set_handler(on_telegram)
 
-        if success:
-            db.save_post(
-                source_channel=source_channel,
-                source_message_id=source_msg_id,
-                text=text,
-                views=0,
-                reactions_count=0,
-                has_media=has_media,
-                published=1,
-            )
-            print(f"[Lightning] Published: {headline[:50]}")
+    async def run_telegram():
+        await collector.start(cfg["SOURCE_CHANNELS"])
 
-    collector.set_handler(on_message)
+    tasks.append(asyncio.create_task(run_telegram()))
+    tasks.append(asyncio.create_task(rss_poller(cfg, translator, pub, db)))
 
-    print(f"[Lightning] === RE:POST ===")
-    print(f"[Lightning] Target: {cfg['TARGET_CHANNEL']}")
-    print(f"[Lightning] Donors ({len(cfg['SOURCE_CHANNELS'])}): {cfg['SOURCE_CHANNELS']}")
-    print(f"[Lightning] Listening...")
+    print(f"[RE:POST] === RE:POST ===")
+    print(f"[RE:POST] Target: {cfg['TARGET_CHANNEL']}")
+    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + RSS")
+    print(f"[RE:POST] Running...")
 
-    await collector.start(cfg["SOURCE_CHANNELS"])
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
@@ -193,7 +252,6 @@ if __name__ == "__main__":
     env_path = os.path.abspath(sys.argv[1])
 
     if "--auth" in sys.argv:
-        from telethon import TelegramClient
         code = None
         for i, a in enumerate(sys.argv):
             if a == "--auth" and i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("-"):
