@@ -3,8 +3,9 @@ RE:POST — Lightning News Channel.
 Real-time Telethon listener → keyword filter → Yandex Translate → Bot API publish.
 
 Usage:
-  1) First-time auth (interactive): python core/lightning/run_lightning.py channels/repost/.env --auth
-  2) Run in screen:               python core/lightning/run_lightning.py channels/repost/.env
+  1) Request code:     python core/lightning/run_lightning.py channels/repost/.env --auth
+  2) Complete auth:    python core/lightning/run_lightning.py channels/repost/.env --auth 12345
+  3) Run in screen:    python core/lightning/run_lightning.py channels/repost/.env
 """
 import os
 import sys
@@ -52,12 +53,35 @@ def make_text_hash(text: str) -> str:
     return hashlib.md5(text[:200].encode("utf-8")).hexdigest()
 
 
-async def auth_once(env_path: str):
+async def auth_once(env_path: str, code: str = None):
+    channel_dir = os.path.dirname(os.path.abspath(env_path))
+    os.chdir(channel_dir)
     cfg = load_channel_config(env_path)
     client = TelegramClient(SESSION_FILE, cfg["API_ID"], cfg["API_HASH"])
-    await client.start(phone=cfg["PHONE"])
+    await client.connect()
+
+    if await client.is_user_authorized():
+        print("[Lightning] Already authorized")
+
+    elif code:
+        state_path = ".auth_state"
+        if not os.path.exists(state_path):
+            print(f"[Lightning] Run --auth first (without code) to request code")
+            return
+        with open(state_path) as f:
+            phone_code_hash = f.read().strip()
+        await client.sign_in(phone=cfg["PHONE"], code=code, phone_code_hash=phone_code_hash)
+        os.remove(state_path)
+        print("[Lightning] Auth successful, session saved")
+
+    else:
+        sent = await client.send_code_request(cfg["PHONE"])
+        with open(".auth_state", "w") as f:
+            f.write(sent.phone_code_hash)
+        print(f"[Lightning] Code sent to {cfg['PHONE']}")
+        print(f"[Lightning] Run --auth <code> to complete")
+
     await client.disconnect()
-    print("[Lightning] Auth successful, session saved")
 
 
 async def main(env_path: str):
@@ -151,6 +175,11 @@ if __name__ == "__main__":
 
     if "--auth" in sys.argv:
         from telethon import TelegramClient
-        asyncio.run(auth_once(env_path))
+        code = None
+        for i, a in enumerate(sys.argv):
+            if a == "--auth" and i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("-"):
+                code = sys.argv[i + 1]
+                break
+        asyncio.run(auth_once(env_path, code))
     else:
         asyncio.run(main(env_path))
