@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from core.config import load_channel_config
 from core.lightning.collector import LightningCollector
-from core.lightning.image_gen import generate_placeholder
 from core.translator.translator import Translator
 from core.publisher.publisher import Publisher
 from core.db.database import Database
@@ -132,17 +131,6 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     post = format_post(headline, body)
 
     has_media = 1 if media_path else 0
-
-    # Generate placeholder image if no media
-    if not media_path:
-        try:
-            img_path = f"media/repost_banner_{source_msg_id}.png"
-            generate_placeholder(img_path, headline)
-            if os.path.exists(img_path):
-                media_path = img_path
-                media_type = "photo"
-        except Exception as e:
-            print(f"[RE:POST] Placeholder gen failed: {e}")
 
     total_published = db.get_stats()["published"]
     total_published += 1
