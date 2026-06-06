@@ -55,7 +55,7 @@ def run_channel(env_path: str, once: bool = False):
 
     total_published = db.get_stats()["published"]
     for post in top_posts:
-        post_id, text, has_media, media_path, score, image_url, media_type = post
+        post_id, text, _, media_path, _, _, media_type = post
 
         print(f"[{name}] Translating #{post_id}...")
         translated = translator.translate(text)

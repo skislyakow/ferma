@@ -9,7 +9,6 @@ Usage:
 """
 import os
 import sys
-import hashlib
 import zlib
 import re
 import asyncio
@@ -57,12 +56,6 @@ def format_post(headline: str, body: str) -> str:
     parts.append("")
     parts.append("⚡️ RE:POST")
     return "\n".join(parts)
-
-
-def make_text_hash(text: str) -> str:
-    if not text:
-        return ""
-    return hashlib.md5(text[:200].encode("utf-8")).hexdigest()
 
 
 AD_BLOCKLIST = [
@@ -266,7 +259,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 await asyncio.sleep(300)
                 continue
 
-            post_id, source_channel, text, has_media, media_path, image_url, media_type = post
+            post_id, source_channel, text, _, media_path, _, media_type = post
 
             if not text or not text.strip():
                 db.mark_skipped(post_id)
@@ -406,10 +399,10 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if db.content_exists(text):
                         continue
                     if is_blocked_content(text):
-                        print(f"[REDDIT] Blocked r/{sub}: {title[:40]}...")
+                        print(f"[REDDIT] Blocked r/{sub}: {text[:60]}...")
                         continue
 
-                    print(f"[REDDIT] >> {title[:60]}...")
+                    print(f"[REDDIT] >> {text[:60]}...")
 
                     if is_russian(text):
                         translated = text

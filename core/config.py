@@ -12,7 +12,6 @@ def load_channel_config(env_path: str = None):
         "API_ID": int(env.get("TELEGRAM_API_ID", "0")),
         "API_HASH": env.get("TELEGRAM_API_HASH", ""),
         "PHONE": env.get("TELEGRAM_PHONE", ""),
-        "SESSION_NAME": env.get("SESSION_NAME", "anon"),
         "YC_TRANSLATE_API_KEY": env.get("YC_TRANSLATE_API_KEY", ""),
         "YC_FOLDER_ID": env.get("YC_FOLDER_ID", ""),
         "BOT_TOKEN": env.get("BOT_TOKEN", ""),
@@ -26,6 +25,4 @@ def load_channel_config(env_path: str = None):
         "CPA_INSERT_EVERY": int(env.get("CPA_INSERT_EVERY", "3")),
         "REQUIRE_MEDIA": env.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes"),
         "REDDIT_INTERVAL": env.get("REDDIT_INTERVAL", "300"),
-        "REDDIT_CLIENT_ID": env.get("REDDIT_CLIENT_ID", ""),
-        "REDDIT_CLIENT_SECRET": env.get("REDDIT_CLIENT_SECRET", ""),
     }

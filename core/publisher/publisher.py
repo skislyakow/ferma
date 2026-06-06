@@ -2,7 +2,6 @@ import os
 import requests
 import random
 import re
-import html
 
 
 def _watermark_image(image_path, logo_path):
