@@ -29,6 +29,8 @@ DEFAULT_FILTERS = {
         "rozetked.me",
         "пройдите наш тест",
         "подписаться | сайт |",
+        "участвуй в розыгрыше",
+        "telegram | whatsapp | youtube | рассылка",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
