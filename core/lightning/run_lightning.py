@@ -335,11 +335,46 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
 
 async def reddit_poller(subreddits, cfg, translator, pub, db):
     import requests as http
+    from requests.auth import HTTPBasicAuth
 
     if not subreddits:
         return
 
-    HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"}
+    cid = cfg.get("REDDIT_CLIENT_ID", "")
+    csec = cfg.get("REDDIT_CLIENT_SECRET", "")
+    token = None
+
+    def refresh_token():
+        nonlocal token
+        if not cid or not csec:
+            return False
+        try:
+            resp = http.post("https://www.reddit.com/api/v1/access_token",
+                             auth=HTTPBasicAuth(cid, csec),
+                             data={"grant_type": "client_credentials"},
+                             headers={"User-Agent": "ferma/1.0"}, timeout=10)
+            if resp.status_code == 200:
+                token = resp.json().get("access_token")
+                print(f"[REDDIT] Token acquired")
+                return True
+            else:
+                print(f"[REDDIT] Token error: {resp.status_code}")
+                token = None
+                return False
+        except Exception as e:
+            print(f"[REDDIT] Token exception: {e}")
+            token = None
+            return False
+
+    refresh_token()
+
+    def api_headers():
+        h = {"User-Agent": "ferma/1.0"}
+        if token:
+            h["Authorization"] = f"Bearer {token}"
+        return h
+
+    api_base = "https://oauth.reddit.com" if token else "https://www.reddit.com"
     last_ts = {}
 
     print(f"[REDDIT] Monitoring {len(subreddits)} subreddits...")
@@ -347,8 +382,15 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
     while True:
         for sub in subreddits:
             try:
-                url = f"https://www.reddit.com/r/{sub}/new.json"
-                r = await asyncio.to_thread(http.get, url, headers=HEADERS, timeout=15)
+                url = f"{api_base}/r/{sub}/new"
+                r = await asyncio.to_thread(http.get, url, headers=api_headers(), timeout=15)
+                if r.status_code == 401 and token:
+                    print(f"[REDDIT] Token expired, refreshing...")
+                    refresh_token()
+                    r = await asyncio.to_thread(http.get, url, headers=api_headers(), timeout=15)
+                if r.status_code == 403 and not token:
+                    print(f"[REDDIT] Need REDDIT_CLIENT_ID/SECRET in .env to access r/{sub}")
+                    continue
                 if r.status_code != 200:
                     print(f"[REDDIT] HTTP {r.status_code} for r/{sub}")
                     continue

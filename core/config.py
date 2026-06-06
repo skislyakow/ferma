@@ -25,4 +25,7 @@ def load_channel_config(env_path: str = None):
         "CPA_LINKS": [x.strip() for x in env.get("CPA_LINKS", "").split(",") if x.strip()],
         "CPA_INSERT_EVERY": int(env.get("CPA_INSERT_EVERY", "3")),
         "REQUIRE_MEDIA": env.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes"),
+        "REDDIT_INTERVAL": env.get("REDDIT_INTERVAL", "300"),
+        "REDDIT_CLIENT_ID": env.get("REDDIT_CLIENT_ID", ""),
+        "REDDIT_CLIENT_SECRET": env.get("REDDIT_CLIENT_SECRET", ""),
     }
