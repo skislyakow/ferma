@@ -25,6 +25,7 @@ DEFAULT_FILTERS = {
         "@insiderpaper",
         "insiderpaper",
         "shot в max", "в мах",
+        "подписывайтесь", "в max |", "в telegram",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
