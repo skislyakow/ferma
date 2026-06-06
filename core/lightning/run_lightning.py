@@ -333,6 +333,127 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
         await asyncio.sleep(300)
 
 
+async def reddit_poller(subreddits, cfg, translator, pub, db):
+    import requests as http
+
+    if not subreddits:
+        return
+
+    HEADERS = {"User-Agent": "ferma/1.0 (by /u/skisl)"}
+    last_ts = {}
+
+    print(f"[REDDIT] Monitoring {len(subreddits)} subreddits...")
+
+    while True:
+        for sub in subreddits:
+            try:
+                url = f"https://www.reddit.com/r/{sub}/new.json"
+                r = await asyncio.to_thread(http.get, url, headers=HEADERS, timeout=15)
+                if r.status_code != 200:
+                    print(f"[REDDIT] HTTP {r.status_code} for r/{sub}")
+                    continue
+
+                children = r.json().get("data", {}).get("children", [])
+                if not children:
+                    continue
+
+                newest_ts = max(c["data"]["created_utc"] for c in children)
+                prev_ts = last_ts.get(sub, 0)
+
+                if prev_ts and newest_ts <= prev_ts:
+                    continue
+
+                for child in reversed(children):
+                    post = child["data"]
+                    created = post["created_utc"]
+                    if prev_ts and created <= prev_ts:
+                        continue
+
+                    pid = post["id"]
+                    title = (post.get("title") or "").strip()
+                    selftext = (post.get("selftext") or "").strip()
+
+                    if not title:
+                        continue
+
+                    text = f"{title}\n\n{selftext}" if selftext else title
+                    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+                    text = strip_html(text)
+
+                    if not text:
+                        continue
+
+                    source_channel = f"reddit:r/{sub}"
+                    source_msg_id = zlib.crc32(pid.encode()) & 0x7FFFFFFF
+
+                    if db.post_exists(source_channel, source_msg_id):
+                        continue
+                    if db.content_exists(text):
+                        continue
+                    if is_blocked_content(text):
+                        print(f"[REDDIT] Blocked r/{sub}: {title[:40]}...")
+                        continue
+
+                    print(f"[REDDIT] >> {title[:60]}...")
+
+                    if is_russian(text):
+                        translated = text
+                    else:
+                        translated = translator.translate(text)
+                        if not translated:
+                            print(f"[REDDIT] Translation failed")
+                            continue
+
+                    translated = clean_source_footer(translated)
+                    if not translated.strip():
+                        continue
+
+                    lines = translated.strip().split("\n")
+                    headline = lines[0]
+                    body = "\n".join(lines[1:])
+
+                    post_text = f"👉 {headline}"
+                    if body:
+                        post_text += f"\n\n{body}"
+                    post_text += f"\n\n{source_channel}\n\n⚡️ RE:POST"
+
+                    total_published = db.get_stats()["published"]
+                    total_published += 1
+
+                    media_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
+                    media_type = "photo"
+
+                    success = pub.publish(
+                        text=post_text,
+                        chat_id=cfg["TARGET_CHANNEL"],
+                        total_published=total_published,
+                        cpa_links=cfg["CPA_LINKS"],
+                        cpa_every=cfg["CPA_INSERT_EVERY"],
+                        media_path=media_path,
+                        media_type=media_type,
+                    )
+
+                    if success:
+                        db.save_post(
+                            source_channel=source_channel,
+                            source_message_id=source_msg_id,
+                            text=text,
+                            views=0,
+                            reactions_count=0,
+                            has_media=0,
+                            published=1,
+                        )
+                        print(f"[REDDIT] Published: {headline[:50]}")
+
+            except Exception as e:
+                print(f"[REDDIT] Error r/{sub}: {e}")
+                import traceback
+                traceback.print_exc()
+
+        interval = int(cfg.get("REDDIT_INTERVAL", 300))
+        await asyncio.sleep(interval)
+
+
 async def main(env_path: str):
     channel_dir = os.path.dirname(os.path.abspath(env_path))
     os.chdir(channel_dir)
@@ -390,15 +511,20 @@ async def main(env_path: str):
     # Parse Russian source channels from .env
     ru_channels = [x.strip() for x in dotenv_values(env_path).get("RU_SOURCE_CHANNELS", "").split(",") if x.strip()]
 
+    # Parse Reddit subreddits from .env
+    reddit_subs = [x.strip() for x in dotenv_values(env_path).get("REDDIT_SUBREDDITS", "").split(",") if x.strip()]
+
     tasks.append(asyncio.create_task(run_telegram()))
     if rss_feeds:
         tasks.append(asyncio.create_task(rss_poller(rss_feeds, cfg, translator, pub, db)))
     if ru_channels:
         tasks.append(asyncio.create_task(ru_source_poller(ru_channels, cfg, pub, db)))
+    if reddit_subs:
+        tasks.append(asyncio.create_task(reddit_poller(reddit_subs, cfg, translator, pub, db)))
 
     print(f"[RE:POST] === RE:POST ===")
     print(f"[RE:POST] Target: {cfg['TARGET_CHANNEL']}")
-    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS + {len(ru_channels)} RU channels")
+    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS + {len(ru_channels)} RU + {len(reddit_subs)} Reddit")
     print(f"[RE:POST] Running...")
 
     await asyncio.gather(*tasks)
