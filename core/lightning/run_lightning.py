@@ -272,6 +272,15 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 await asyncio.sleep(300)
                 continue
 
+            text = text.strip()
+            text = re.sub(r'\n@\w+$', '', text)
+
+            if len(text) < 40:
+                print(f"[RU] Too short ({len(text)} chars) from {source_channel}, skipping")
+                db.mark_skipped(post_id)
+                await asyncio.sleep(300)
+                continue
+
             if is_blocked_content(text):
                 print(f"[RU] Blocked content from {source_channel}")
                 db.mark_skipped(post_id)
