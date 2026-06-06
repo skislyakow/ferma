@@ -2,6 +2,7 @@ import os
 import requests
 import random
 import re
+import html
 
 
 def _watermark_image(image_path, logo_path):
@@ -63,8 +64,7 @@ class Publisher:
                     break
             if skip:
                 continue
-            line = re.sub(r'https?://\S+', '', line).strip()
-            if line:
+            if line.strip():
                 clean.append(line)
         result = "\n".join(clean).strip()
         result = re.sub(r"\n{3,}", "\n\n", result)
@@ -80,7 +80,8 @@ class Publisher:
 
     def publish(self, text: str, chat_id: str, total_published: int = 0,
                 cpa_links: list[str] = None, cpa_every: int = 3,
-                media_path: str = None, media_type: str = "photo") -> bool:
+                media_path: str = None, media_type: str = "photo",
+                parse_mode: str = None) -> bool:
         if not self.bot_token:
             print("[Publisher] No bot token!")
             return False
@@ -94,42 +95,39 @@ class Publisher:
                 media_path = _watermark_image(media_path, logo)
 
             if not media_path:
+                payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": False}
+                if parse_mode:
+                    payload["parse_mode"] = parse_mode
                 url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-                resp = requests.post(url, json={
-                    "chat_id": chat_id,
-                    "text": text,
-                    "disable_web_page_preview": False,
-                }, timeout=15)
+                resp = requests.post(url, json=payload, timeout=15)
                 sent_type = "text"
             elif media_type == "video":
                 if len(text) > 1024:
                     print("[Publisher] Text too long for video caption, skipping")
                     text = ""
+                data = {"chat_id": chat_id, "caption": text, "supports_streaming": True}
+                if parse_mode:
+                    data["parse_mode"] = parse_mode
                 url = f"https://api.telegram.org/bot{self.bot_token}/sendVideo"
                 with open(media_path, 'rb') as video:
-                    resp = requests.post(url, data={
-                        "chat_id": chat_id,
-                        "caption": text,
-                        "supports_streaming": True,
-                    }, files={"video": video}, timeout=120)
+                    resp = requests.post(url, data=data, files={"video": video}, timeout=120)
                 sent_type = "video"
             else:
                 if len(text) > 1024:
                     print("[Publisher] Text too long for photo caption, skipping image")
+                    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": False}
+                    if parse_mode:
+                        payload["parse_mode"] = parse_mode
                     url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-                    resp = requests.post(url, json={
-                        "chat_id": chat_id,
-                        "text": text,
-                        "disable_web_page_preview": False,
-                    }, timeout=15)
+                    resp = requests.post(url, json=payload, timeout=15)
                     sent_type = "text (photo fallback)"
                 else:
+                    data = {"chat_id": chat_id, "caption": text}
+                    if parse_mode:
+                        data["parse_mode"] = parse_mode
                     url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
                     with open(media_path, 'rb') as photo:
-                        resp = requests.post(url, data={
-                            "chat_id": chat_id,
-                            "caption": text,
-                        }, files={"photo": photo}, timeout=30)
+                        resp = requests.post(url, data=data, files={"photo": photo}, timeout=30)
                     sent_type = "photo"
 
             resp.raise_for_status()

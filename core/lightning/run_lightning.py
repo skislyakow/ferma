@@ -398,7 +398,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if not text:
                         continue
 
-                    source_channel = f"reddit:r/{sub}"
+                    source_channel = f'<a href="https://www.reddit.com/r/{sub}/">reddit:r/{sub}</a>'
                     source_msg_id = zlib.crc32(pid.encode()) & 0x7FFFFFFF
 
                     if db.post_exists(source_channel, source_msg_id):
@@ -435,6 +435,10 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         print(f"[REDDIT] No body text, skipping")
                         continue
 
+                    import html as _html
+                    headline = _html.escape(headline)
+                    body = _html.escape(body)
+
                     post_text = f"👉 {headline}"
                     if body:
                         post_text += f"\n\n{body}"
@@ -454,6 +458,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         cpa_every=cfg["CPA_INSERT_EVERY"],
                         media_path=media_path,
                         media_type=media_type,
+                        parse_mode="HTML",
                     )
 
                     if success:
