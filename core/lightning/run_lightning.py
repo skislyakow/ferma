@@ -334,92 +334,60 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
 
 
 async def reddit_poller(subreddits, cfg, translator, pub, db):
-    import requests as http
-    from requests.auth import HTTPBasicAuth
+    import feedparser
+    import time
 
     if not subreddits:
         return
 
-    cid = cfg.get("REDDIT_CLIENT_ID", "")
-    csec = cfg.get("REDDIT_CLIENT_SECRET", "")
-    token = None
-
-    def refresh_token():
-        nonlocal token
-        if not cid or not csec:
-            return False
-        try:
-            resp = http.post("https://www.reddit.com/api/v1/access_token",
-                             auth=HTTPBasicAuth(cid, csec),
-                             data={"grant_type": "client_credentials"},
-                             headers={"User-Agent": "ferma/1.0"}, timeout=10)
-            if resp.status_code == 200:
-                token = resp.json().get("access_token")
-                print(f"[REDDIT] Token acquired")
-                return True
-            else:
-                print(f"[REDDIT] Token error: {resp.status_code}")
-                token = None
-                return False
-        except Exception as e:
-            print(f"[REDDIT] Token exception: {e}")
-            token = None
-            return False
-
-    refresh_token()
-
-    def api_headers():
-        h = {"User-Agent": "ferma/1.0"}
-        if token:
-            h["Authorization"] = f"Bearer {token}"
-        return h
-
-    api_base = "https://oauth.reddit.com" if token else "https://www.reddit.com"
     last_ts = {}
+    seen = set()
 
-    print(f"[REDDIT] Monitoring {len(subreddits)} subreddits...")
+    print(f"[REDDIT] Monitoring {len(subreddits)} subreddits via RSS...")
+
+    def fetch_entries(sub):
+        url = f"https://www.reddit.com/r/{sub}/new/.rss"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        feed = feedparser.parse(url, agent=headers["User-Agent"])
+        return feed.entries
 
     while True:
         for sub in subreddits:
             try:
-                url = f"{api_base}/r/{sub}/new"
-                r = await asyncio.to_thread(http.get, url, headers=api_headers(), timeout=15)
-                if r.status_code == 401 and token:
-                    print(f"[REDDIT] Token expired, refreshing...")
-                    refresh_token()
-                    r = await asyncio.to_thread(http.get, url, headers=api_headers(), timeout=15)
-                if r.status_code == 403 and not token:
-                    print(f"[REDDIT] Need REDDIT_CLIENT_ID/SECRET in .env to access r/{sub}")
-                    continue
-                if r.status_code != 200:
-                    print(f"[REDDIT] HTTP {r.status_code} for r/{sub}")
+                entries = await asyncio.to_thread(fetch_entries, sub)
+                if not entries:
                     continue
 
-                children = r.json().get("data", {}).get("children", [])
-                if not children:
-                    continue
+                newest_ts = 0
+                for e in entries:
+                    ts = int(time.mktime(e.get("published_parsed", time.gmtime(0))))
+                    newest_ts = max(newest_ts, ts)
 
-                newest_ts = max(c["data"]["created_utc"] for c in children)
                 prev_ts = last_ts.get(sub, 0)
-
                 if prev_ts and newest_ts <= prev_ts:
                     continue
 
-                for child in reversed(children):
-                    post = child["data"]
-                    created = post["created_utc"]
-                    if prev_ts and created <= prev_ts:
+                for entry in reversed(entries):
+                    ts = int(time.mktime(entry.get("published_parsed", time.gmtime(0))))
+                    if prev_ts and ts <= prev_ts:
                         continue
 
-                    pid = post["id"]
-                    title = (post.get("title") or "").strip()
-                    selftext = (post.get("selftext") or "").strip()
+                    pid = entry.get("id", "").split("/")[-1] or entry.get("link", "").split("/")[-2]
+                    if pid in seen:
+                        continue
+                    seen.add(pid)
+
+                    title = (entry.get("title") or "").strip()
+                    summary = (entry.get("summary") or "").strip()
+                    desc = (entry.get("description") or "").strip()
 
                     if not title:
                         continue
 
-                    text = f"{title}\n\n{selftext}" if selftext else title
-                    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+                    text = title
+                    body = summary or desc
+                    if body:
+                        text = f"{title}\n\n{body}"
                     text = strip_html(text)
 
                     if not text:
@@ -487,12 +455,17 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         )
                         print(f"[REDDIT] Published: {headline[:50]}")
 
+                last_ts[sub] = newest_ts
+
             except Exception as e:
                 print(f"[REDDIT] Error r/{sub}: {e}")
                 import traceback
                 traceback.print_exc()
 
         interval = int(cfg.get("REDDIT_INTERVAL", 300))
+        if len(seen) > 5000:
+            seen.clear()
+            print("[REDDIT] Seen set cleared")
         await asyncio.sleep(interval)
 
 
