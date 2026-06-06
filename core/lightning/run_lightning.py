@@ -29,6 +29,8 @@ BREAKING_KEYWORDS = [
     "breaking", "just in", "alert", "update", "developing",
     "confirmed", "report", "announce", "happening now",
     "exclusive", "urgent", "flash",
+    "срочно", "эксклюзив", "важно", "подтверждено",
+    "сообщает", "объявляет", "происходит", "внимание",
     "🚨", "🔴", "⚠️", "‼️",
 ]
 
@@ -40,6 +42,10 @@ SESSION_FILE = "repost.session"
 def has_breaking_keyword(text: str) -> bool:
     t = text.lower()
     return any(kw in t for kw in BREAKING_KEYWORDS)
+
+
+def is_russian(text: str) -> bool:
+    return bool(re.search(r'[\u0400-\u04FF]', text))
 
 
 def format_post(headline: str, body: str) -> str:
@@ -120,10 +126,13 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
 
     print(f"[RE:POST] >> {text[:80]}...")
 
-    translated = translator.translate(text)
-    if not translated or translated == text:
-        print(f"[RE:POST] Translation failed or skipped")
-        return False
+    if is_russian(text):
+        translated = text
+    else:
+        translated = translator.translate(text)
+        if not translated:
+            print(f"[RE:POST] Translation failed")
+            return False
 
     translated = clean_source_footer(translated)
 
