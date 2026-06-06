@@ -24,6 +24,7 @@ DEFAULT_FILTERS = {
         "следите за новостями на",
         "@insiderpaper",
         "insiderpaper",
+        "shot в max", "в мах",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
