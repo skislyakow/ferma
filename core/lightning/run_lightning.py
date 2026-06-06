@@ -273,7 +273,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 continue
 
             text = text.strip()
-            text = re.sub(r'\n@\w+$', '', text)
+            text = re.sub(r'(\n@\w+)+$', '', text)
 
             if len(text) < 40:
                 print(f"[RU] Too short ({len(text)} chars) from {source_channel}, skipping")
@@ -293,8 +293,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 await asyncio.sleep(300)
                 continue
 
-            formatted = f'Канал "{source_channel}" — опубликовал:\n\n{text}'
-            post_text = formatted + f'\n\n⚡️ RE:POST'
+            post_text = f'{text}\n\n{source_channel}\n\n⚡️ RE:POST'
 
             # Use fallback image if no media
             m_path, m_type = media_path, media_type or "photo"
