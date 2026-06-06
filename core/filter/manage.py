@@ -26,6 +26,7 @@ DEFAULT_FILTERS = {
         "insiderpaper",
         "shot в max", "в мах",
         "подписывайтесь", "в max |", "в telegram",
+        "rozetked.me",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
