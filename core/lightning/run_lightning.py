@@ -80,8 +80,9 @@ SOURCE_FOOTER_PATTERNS = [
 
 
 def strip_html(text: str) -> str:
+    import html
     text = re.sub(r'<[^>]+>', '', text)
-    text = re.sub(r'&[a-z]+;', ' ', text)
+    text = html.unescape(text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
@@ -389,6 +390,8 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if body:
                         text = f"{title}\n\n{body}"
                     text = strip_html(text)
+                    text = re.sub(r'(?:submitted by\s+\S+\s+to\s+\S+|comments?\s*(?:share|save|report)?)\s*', '', text, flags=re.IGNORECASE).strip()
+                    text = re.sub(r'\s{2,}', ' ', text).strip()
 
                     if not text:
                         continue
