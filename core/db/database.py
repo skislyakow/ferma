@@ -105,6 +105,17 @@ class Database:
             ).fetchone()
             return row
 
+    def get_best_unpublished_post(self):
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT id, source_channel, text, has_media, media_path, image_url, media_type
+                FROM posts
+                WHERE published = 0 AND text IS NOT NULL AND text != ''
+                ORDER BY views DESC, source_message_id DESC
+                LIMIT 1""",
+            ).fetchone()
+            return row
+
     def mark_published(self, post_id):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(

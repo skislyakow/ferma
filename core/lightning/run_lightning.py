@@ -260,7 +260,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
     while True:
         try:
             parser.parse_all(ru_channels, limit_per_channel=10)
-            post = db.get_unpublished_post()
+            post = db.get_best_unpublished_post()
             if not post:
                 await asyncio.sleep(300)
                 continue
