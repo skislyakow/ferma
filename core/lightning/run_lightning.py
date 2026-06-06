@@ -430,7 +430,10 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if not headline or len(headline) < 10 or re.match(r'^[rR]/\w+$', headline) or source_channel in headline:
                         print(f"[REDDIT] Empty/useless headline, skipping")
                         continue
-                    body = "\n".join(lines[1:])
+                    body = "\n".join(lines[1:]).strip()
+                    if not body:
+                        print(f"[REDDIT] No body text, skipping")
+                        continue
 
                     post_text = f"👉 {headline}"
                     if body:
