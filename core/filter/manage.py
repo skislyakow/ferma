@@ -27,6 +27,8 @@ DEFAULT_FILTERS = {
         "shot в max", "в мах",
         "подписывайтесь", "в max |", "в telegram",
         "rozetked.me",
+        "пройдите наш тест",
+        "подписаться | сайт |",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
