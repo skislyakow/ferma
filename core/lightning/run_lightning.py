@@ -247,6 +247,77 @@ async def rss_poller(feed_urls, cfg, translator, pub, db):
         await asyncio.sleep(120)
 
 
+async def ru_source_poller(ru_channels, cfg, pub, db):
+    """Poll Russian Telegram channels for posts."""
+    from core.parser.web_parser import WebParser
+
+    if not ru_channels:
+        return
+
+    parser = WebParser(db)
+    print(f"[RU] Monitoring {len(ru_channels)} Russian channels...")
+
+    while True:
+        try:
+            parser.parse_all(ru_channels, limit_per_channel=10)
+            post = db.get_unpublished_post()
+            if not post:
+                await asyncio.sleep(300)
+                continue
+
+            post_id, source_channel, text, has_media, media_path, image_url, media_type = post
+
+            if not text or not text.strip():
+                db.mark_skipped(post_id)
+                await asyncio.sleep(300)
+                continue
+
+            if is_blocked_content(text):
+                print(f"[RU] Blocked content from {source_channel}")
+                db.mark_skipped(post_id)
+                await asyncio.sleep(300)
+                continue
+
+            if db.content_exists(text):
+                print(f"[RU] Duplicate content from {source_channel}")
+                db.mark_skipped(post_id)
+                await asyncio.sleep(300)
+                continue
+
+            formatted = f'Канал "{source_channel}" — опубликовал:\n\n{text}'
+            post_text = formatted + f'\n\n⚡️ RE:POST'
+
+            # Use fallback image if no media
+            m_path, m_type = media_path, media_type or "photo"
+            if not m_path:
+                m_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
+                m_type = "photo"
+
+            total_published = db.get_stats()["published"]
+            total_published += 1
+
+            success = pub.publish(
+                text=post_text,
+                chat_id=cfg["TARGET_CHANNEL"],
+                total_published=total_published,
+                cpa_links=cfg["CPA_LINKS"],
+                cpa_every=cfg["CPA_INSERT_EVERY"],
+                media_path=m_path,
+                media_type=m_type,
+            )
+
+            if success:
+                db.mark_published(post_id)
+                print(f"[RU] Published from {source_channel}: {text[:50]}...")
+
+        except Exception as e:
+            print(f"[RU] Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        await asyncio.sleep(300)
+
+
 async def main(env_path: str):
     channel_dir = os.path.dirname(os.path.abspath(env_path))
     os.chdir(channel_dir)
@@ -301,13 +372,18 @@ async def main(env_path: str):
     # Parse RSS feeds from .env
     rss_feeds = [x.strip() for x in dotenv_values(env_path).get("RSS_FEEDS", "").split(",") if x.strip()]
 
+    # Parse Russian source channels from .env
+    ru_channels = [x.strip() for x in dotenv_values(env_path).get("RU_SOURCE_CHANNELS", "").split(",") if x.strip()]
+
     tasks.append(asyncio.create_task(run_telegram()))
     if rss_feeds:
         tasks.append(asyncio.create_task(rss_poller(rss_feeds, cfg, translator, pub, db)))
+    if ru_channels:
+        tasks.append(asyncio.create_task(ru_source_poller(ru_channels, cfg, pub, db)))
 
     print(f"[RE:POST] === RE:POST ===")
     print(f"[RE:POST] Target: {cfg['TARGET_CHANNEL']}")
-    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS feeds")
+    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS + {len(ru_channels)} RU channels")
     print(f"[RE:POST] Running...")
 
     await asyncio.gather(*tasks)
