@@ -27,7 +27,7 @@ class Translator:
         body = {
             "targetLanguageCode": self.target_lang,
             "texts": [text],
-            "format": "plain_text",
+            "format": "PLAIN_TEXT",
         }
         if self.folder_id:
             body["folderId"] = self.folder_id
