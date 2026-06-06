@@ -33,6 +33,7 @@ DEFAULT_FILTERS = {
         "telegram | whatsapp | youtube | рассылка",
         "подробнее о всех ярких событиях",
         "читайте на нашем сайте",
+        "baza в max",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
