@@ -274,9 +274,16 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
 
             text = text.strip()
             text = re.sub(r'(\n@\w+)+$', '', text)
+            text = re.sub(r'[\u200b\u200c\u200d\ufeff\u00a0]', '', text)
 
             if len(text) < 40:
                 print(f"[RU] Too short ({len(text)} chars) from {source_channel}, skipping")
+                db.mark_skipped(post_id)
+                await asyncio.sleep(300)
+                continue
+
+            if not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', text):
+                print(f"[RU] No visible text from {source_channel}, skipping")
                 db.mark_skipped(post_id)
                 await asyncio.sleep(300)
                 continue
