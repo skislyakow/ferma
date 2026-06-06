@@ -390,7 +390,9 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if body:
                         text = f"{title}\n\n{body}"
                     text = strip_html(text)
-                    text = re.sub(r'(?:submitted by\s+\S+\s+to\s+\S+|comments?\s*(?:share|save|report)?)\s*', '', text, flags=re.IGNORECASE).strip()
+                    text = re.sub(r'(?:\b(?:submitted|posted|published|provided|sent|by)\s+(?:by\s+)?/?u/\S+|comments?\s*(?:share|save|report)?)\s*', '', text, flags=re.IGNORECASE).strip()
+                    text = re.sub(r'\s*\[link\]\s*\[\]\s*', '', text).strip()
+                    text = re.sub(r'\s*\(paywall\)\s*', '', text, flags=re.IGNORECASE).strip()
                     text = re.sub(r'\s{2,}', ' ', text).strip()
 
                     if not text:
@@ -418,11 +420,16 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                             continue
 
                     translated = clean_source_footer(translated)
+                    translated = re.sub(r'(?:(?:представленн[ыо][ейм]|опубликован[оа]|отправлен[оа]|предоставленн[ыо][ейм]|по данным)\s+\S+|\[ссылка\]\s*\[\])\s*', '', translated, flags=re.IGNORECASE).strip()
+                    translated = re.sub(r'\s{2,}', ' ', translated).strip()
                     if not translated.strip():
                         continue
 
                     lines = translated.strip().split("\n")
-                    headline = lines[0]
+                    headline = lines[0].strip()
+                    if not headline:
+                        print(f"[REDDIT] Empty headline after cleaning, skipping")
+                        continue
                     body = "\n".join(lines[1:])
 
                     post_text = f"👉 {headline}"
