@@ -4,6 +4,35 @@ import random
 import re
 
 
+def _watermark_image(image_path, logo_path):
+    try:
+        from PIL import Image
+    except ImportError:
+        return image_path
+    if not os.path.exists(logo_path):
+        return image_path
+    if os.path.abspath(image_path) == os.path.abspath(logo_path):
+        return image_path
+    try:
+        img = Image.open(image_path).convert("RGBA")
+        logo = Image.open(logo_path).convert("RGBA")
+        ratio = img.width * 0.12 / logo.width
+        logo = logo.resize((int(logo.width * ratio), int(logo.height * ratio)), Image.LANCZOS)
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        x = img.width - logo.width - 15
+        y = img.height - logo.height - 15
+        logo.putalpha(int(255 * 0.55))
+        overlay.paste(logo, (x, y), logo)
+        result = Image.alpha_composite(img, overlay)
+        if image_path.lower().endswith((".jpg", ".jpeg")):
+            result = result.convert("RGB")
+        result.save(image_path, quality=95)
+        print(f"[Watermark] Applied to {os.path.basename(image_path)}")
+    except Exception as e:
+        print(f"[Watermark] Failed: {e}")
+    return image_path
+
+
 class Publisher:
     def __init__(self):
         self.bot_token = ""
@@ -60,6 +89,10 @@ class Publisher:
         text = self._inject_cpa(text, total_published, cpa_links or [], cpa_every)
 
         try:
+            if media_path and media_type == "photo":
+                logo = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "repost2.png")
+                media_path = _watermark_image(media_path, logo)
+
             if not media_path:
                 url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
                 resp = requests.post(url, json={
