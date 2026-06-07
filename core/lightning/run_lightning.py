@@ -424,9 +424,6 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         print(f"[REDDIT] Empty/useless headline, skipping")
                         continue
                     body = "\n".join(lines[1:]).strip()
-                    if not body:
-                        print(f"[REDDIT] No body text, skipping")
-                        continue
 
                     import html as _html
                     headline = _html.escape(headline)
