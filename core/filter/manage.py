@@ -72,6 +72,7 @@ DEFAULT_FILTERS = {
         "#sponsored", "#ad", "#реклама",
         "news app", "download the app", "get the app",
         "follow news", "match your interests",
+        "российское вторжение",
     ],
     "external_source_patterns": [
         "читайте на", "читайте в", "подробнее на", "подробнее в",
