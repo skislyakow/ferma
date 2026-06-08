@@ -434,7 +434,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     post_text = f"👉 {headline}"
                     if body:
                         post_text += f"\n\n{body}"
-                    post_text += f"\n\n{source_channel}\n\n⚡️ RE:POST"
+                    post_text += f"\n\n\n{source_channel}\n\n⚡️ RE:POST"
 
                     total_published = db.get_stats()["published"]
                     total_published += 1
