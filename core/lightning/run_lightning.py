@@ -116,15 +116,16 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     if text:
         text = strip_html(text)
 
+    if db.post_exists(source_channel, source_msg_id):
+        print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
+        return False
+    if text and db.content_exists(text):
+        print(f"[RE:POST] Duplicate content (hash match)")
+        return False
+
     if text and has_breaking_keyword(text):
         if is_blocked_content(text):
             print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
-            return False
-        if db.post_exists(source_channel, source_msg_id):
-            print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
-            return False
-        if db.content_exists(text):
-            print(f"[RE:POST] Duplicate content (hash match)")
             return False
 
         print(f"[RE:POST] >> {text[:80]}...")
