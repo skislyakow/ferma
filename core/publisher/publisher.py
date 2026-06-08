@@ -54,13 +54,14 @@ class Publisher:
         footer_patterns = _f.get("footer_patterns", [])
         lines = text.split("\n")
         clean = []
-        for line in lines:
+        for i, line in enumerate(lines):
             stripped = line.strip().lower()
             skip = False
-            for pat in footer_patterns:
-                if pat in stripped or stripped.startswith(pat):
-                    skip = True
-                    break
+            if i > 0:  # preserve first line (headline)
+                for pat in footer_patterns:
+                    if pat in stripped or stripped.startswith(pat):
+                        skip = True
+                        break
             if skip:
                 continue
             if line.strip():

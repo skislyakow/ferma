@@ -109,6 +109,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
                        translator, pub, db, cfg, media_path=None, media_type="photo"):
     """Shared pipeline: filter → translate → format → publish → save."""
     is_media_only = False
+    post = None
 
     if not text and not media_path:
         return False
@@ -168,6 +169,10 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     if not media_path and os.path.exists(REPOST_BANNER):
         media_path = REPOST_BANNER
         media_type = "photo"
+
+    if post is None:
+        print(f"[RE:POST] No content to publish from {source_channel}")
+        return False
 
     total_published = db.get_stats()["published"]
     total_published += 1
