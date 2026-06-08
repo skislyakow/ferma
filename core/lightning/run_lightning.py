@@ -108,46 +108,58 @@ def is_blocked_content(text: str) -> bool:
 async def process_news(source_channel: str, source_msg_id: int, text: str,
                        translator, pub, db, cfg, media_path=None, media_type="photo"):
     """Shared pipeline: filter → translate → format → publish → save."""
-    if not text:
-        return False
-    text = strip_html(text)
-    if not has_breaking_keyword(text):
-        return False
-    if is_blocked_content(text):
-        print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
+    is_media_only = False
+
+    if not text and not media_path:
         return False
 
-    if db.post_exists(source_channel, source_msg_id):
-        print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
-        return False
+    if text:
+        text = strip_html(text)
 
-    if db.content_exists(text):
-        print(f"[RE:POST] Duplicate content (hash match)")
-        return False
-
-    print(f"[RE:POST] >> {text[:80]}...")
-
-    if is_russian(text):
-        translated = text
-    else:
-        translated = translator.translate(text)
-        if not translated:
-            print(f"[RE:POST] Translation failed")
+    if text and has_breaking_keyword(text):
+        if is_blocked_content(text):
+            print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
+            return False
+        if db.post_exists(source_channel, source_msg_id):
+            print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
+            return False
+        if db.content_exists(text):
+            print(f"[RE:POST] Duplicate content (hash match)")
             return False
 
-    translated = clean_source_footer(translated)
+        print(f"[RE:POST] >> {text[:80]}...")
 
-    if not translated.strip():
-        print(f"[RE:POST] Empty after footer cleaning, skipping")
-        return False
+        if is_russian(text):
+            translated = text
+        else:
+            translated = translator.translate(text)
+            if not translated:
+                print(f"[RE:POST] Translation failed")
+                return False
 
-    lines = translated.strip().split("\n")
-    headline = lines[0].strip()
-    if not headline or len(headline) < 10:
-        print(f"[RE:POST] Empty/useless headline, skipping")
-        return False
-    body = "\n".join(lines[1:])
-    post = format_post(headline, body, cfg["TARGET_CHANNEL"])
+        translated = clean_source_footer(translated)
+
+        if not translated.strip():
+            print(f"[RE:POST] Empty after footer cleaning, skipping")
+            return False
+
+        lines = translated.strip().split("\n")
+        headline = lines[0].strip()
+        if not headline or len(headline) < 10:
+            if media_path:
+                is_media_only = True
+            else:
+                print(f"[RE:POST] Empty/useless headline, skipping")
+                return False
+        body = "\n".join(lines[1:])
+        if not is_media_only:
+            post = format_post(headline, body, cfg["TARGET_CHANNEL"])
+    elif media_path:
+        is_media_only = True
+
+    if is_media_only:
+        post = f'👉 Кадр дня\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
+        headline = "Кадр дня"
 
     has_media = 1 if media_path else 0
 
@@ -467,13 +479,21 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     translated = re.sub(r'(?:(?:представленн[ыо][ейм]|опубликован[оа]|отправлен[оа]|предоставленн[ыо][ейм]|по данным)\s+\S+|\[ссылка\]\s*\[\])\s*', '', translated, flags=re.IGNORECASE).strip()
                     translated = re.sub(r'\s{2,}', ' ', translated).strip()
                     if not translated.strip():
-                        continue
+                        if media_path:
+                            headline = "Кадр дня"
+                            body = ""
+                        else:
+                            continue
 
                     lines = translated.strip().split("\n")
                     headline = lines[0].strip()
                     if not headline or len(headline) < 10 or headline.lower().startswith('reddit') or re.match(r'^[rR]/\w+$', headline) or 'reddit:' in headline.lower():
-                        print(f"[REDDIT] Empty/useless headline, skipping")
-                        continue
+                        if media_path:
+                            headline = "Кадр дня"
+                            body = ""
+                        else:
+                            print(f"[REDDIT] Empty/useless headline, skipping")
+                            continue
                     body = "\n".join(lines[1:]).strip()
 
                     import html as _html
