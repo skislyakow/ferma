@@ -384,16 +384,17 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     media_path = None
                     media_type = "photo"
                     try:
-                        import re as _re
+                        import re as _re, html as _html
                         _src = summary or desc or ""
                         _m = _re.search(r'<img[^>]+src="([^"]+)"', _src)
                         if _m:
+                            img_url = _html.unescape(_m.group(1))
                             def _dl():
                                 import requests as _req
-                                r = _req.get(_m.group(1), timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                                r = _req.get(img_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
                                 if r.status_code == 200:
                                     os.makedirs("media", exist_ok=True)
-                                    ext = _m.group(1).rsplit(".", 1)[-1].split("?")[0]
+                                    ext = img_url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
                                     fname = f"reddit_{pid}.{ext}"
                                     fpath = os.path.join("media", fname)
                                     with open(fpath, "wb") as f:
@@ -459,7 +460,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     post_text = f"👉 {headline}"
                     if body:
                         post_text += f"\n\n{body}"
-                    post_text += f"\n\n{source_channel}\n\n⚡️ RE:POST"
+                    post_text += f"\n\n{'—' * 15}\n{source_channel}\n\n⚡️ RE:POST"
 
                     total_published = db.get_stats()["published"]
                     total_published += 1
