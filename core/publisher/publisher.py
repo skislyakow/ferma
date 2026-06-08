@@ -94,7 +94,7 @@ class Publisher:
                 media_path = _watermark_image(media_path, logo)
 
             if not media_path:
-                payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": False}
+                payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
                 if parse_mode:
                     payload["parse_mode"] = parse_mode
                 url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
@@ -104,7 +104,7 @@ class Publisher:
                 if len(text) > 1024:
                     print("[Publisher] Text too long for video caption, skipping")
                     text = ""
-                data = {"chat_id": chat_id, "caption": text, "supports_streaming": True}
+                data = {"chat_id": chat_id, "caption": text, "supports_streaming": True, "disable_web_page_preview": True}
                 if parse_mode:
                     data["parse_mode"] = parse_mode
                 url = f"https://api.telegram.org/bot{self.bot_token}/sendVideo"
@@ -114,14 +114,14 @@ class Publisher:
             else:
                 if len(text) > 1024:
                     print("[Publisher] Text too long for photo caption, skipping image")
-                    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": False}
+                    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
                     if parse_mode:
                         payload["parse_mode"] = parse_mode
                     url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
                     resp = requests.post(url, json=payload, timeout=15)
                     sent_type = "text (photo fallback)"
                 else:
-                    data = {"chat_id": chat_id, "caption": text}
+                    data = {"chat_id": chat_id, "caption": text, "disable_web_page_preview": True}
                     if parse_mode:
                         data["parse_mode"] = parse_mode
                     url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
