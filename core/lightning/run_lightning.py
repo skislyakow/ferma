@@ -380,34 +380,20 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if not title:
                         continue
 
-                    text = title
-                    body = summary or desc
-                    if body:
-                        text = f"{title}\n\n{body}"
-                    text = strip_html(text)
-
-                    # Extract image from Reddit RSS media:content
+                    # Extract image URL from summary BEFORE strip_html
                     media_path = None
                     media_type = "photo"
                     try:
-                        media_url = None
-                        if hasattr(entry, "media_content") and entry.media_content:
-                            for m in entry.media_content:
-                                if m.get("medium") == "image" or m.get("url", "").lower().endswith((".jpg", ".jpeg", ".png", ".gif")):
-                                    media_url = m["url"]
-                                    break
-                        if not media_url and hasattr(entry, "links"):
-                            for link in entry.links:
-                                if link.get("rel") == "enclosure" and link.get("type", "").startswith("image/"):
-                                    media_url = link["href"]
-                                    break
-                        if media_url:
+                        import re as _re
+                        _src = summary or desc or ""
+                        _m = _re.search(r'<img[^>]+src="([^"]+)"', _src)
+                        if _m:
                             def _dl():
                                 import requests as _req
-                                r = _req.get(media_url, timeout=15)
+                                r = _req.get(_m.group(1), timeout=15, headers={"User-Agent": "Mozilla/5.0"})
                                 if r.status_code == 200:
                                     os.makedirs("media", exist_ok=True)
-                                    ext = media_url.rsplit(".", 1)[-1].split("?")[0]
+                                    ext = _m.group(1).rsplit(".", 1)[-1].split("?")[0]
                                     fname = f"reddit_{pid}.{ext}"
                                     fpath = os.path.join("media", fname)
                                     with open(fpath, "wb") as f:
@@ -418,6 +404,12 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     except Exception as e:
                         print(f"[REDDIT] Media download failed: {e}")
                         media_path = None
+
+                    text = title
+                    body = summary or desc
+                    if body:
+                        text = f"{title}\n\n{body}"
+                    text = strip_html(text)
                     text = re.sub(r'(?:\b(?:submitted|posted|published|provided|sent|by)\s+(?:by\s+)?/?u/\S+|comments?\s*(?:share|save|report)?)\s*', '', text, flags=re.IGNORECASE).strip()
                     text = re.sub(r'\s*\[link\]\s*\[\]\s*', '', text).strip()
                     text = re.sub(r'\s*\(paywall\)\s*', '', text, flags=re.IGNORECASE).strip()
