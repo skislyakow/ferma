@@ -145,7 +145,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
 
         lines = translated.strip().split("\n")
         headline = lines[0].strip()
-        if not headline or len(headline) < 10:
+        if not headline or len(headline) < 10 or not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', headline):
             if media_path:
                 is_media_only = True
             else:
@@ -487,7 +487,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
                     lines = translated.strip().split("\n")
                     headline = lines[0].strip()
-                    if not headline or len(headline) < 10 or headline.lower().startswith('reddit') or re.match(r'^[rR]/\w+$', headline) or 'reddit:' in headline.lower():
+                    if not headline or len(headline) < 10 or not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', headline) or headline.lower().startswith('reddit') or re.match(r'^[rR]/\w+$', headline) or 'reddit:' in headline.lower():
                         if media_path:
                             headline = "Кадр дня"
                             body = ""
