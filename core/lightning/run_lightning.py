@@ -69,6 +69,8 @@ SOURCE_FOOTER_PATTERNS = [
     r"\s*[—\-–|]\s*(последние новости|latest news|breaking news|news videos|video|photos?\b|фото|видео).*$",
     r"\s*(abc news|reuters)\s*[—\-–|].*$",
     r"^\s*(последние новости|latest news|breaking news)\s*[—\-–|]",
+    r"\[\d{2}\.\d{2}\.\d{4}\]\[(?:Фото|Photo|Видео|Video):.*?\]",
+    r"\s*\[(?:Фото|Photo|Видео|Video):.*?\]",
 ]
 
 
