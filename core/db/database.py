@@ -72,6 +72,14 @@ class Database:
             ).fetchone()
             return row is not None
 
+    def message_id_exists(self, source_message_id):
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM posts WHERE source_message_id = ?",
+                (source_message_id,),
+            ).fetchone()
+            return row is not None
+
     def save_post(self, source_channel, source_message_id, text, views, reactions_count, has_media, media_path=None, image_url=None, media_type="photo", published=0):
         text_hash = self.make_text_hash(text)
         with sqlite3.connect(self.db_path) as conn:

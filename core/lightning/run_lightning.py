@@ -457,6 +457,9 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     source_channel = f'reddit/r/{sub}'
                     source_msg_id = zlib.crc32(pid.encode()) & 0x7FFFFFFF
 
+                    if db.message_id_exists(source_msg_id):
+                        print(f"[REDDIT] Skip dup source_message_id={source_msg_id}")
+                        continue
                     if db.post_exists(source_channel, source_msg_id):
                         continue
                     if db.content_exists(text):
@@ -530,7 +533,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                             text=text,
                             views=0,
                             reactions_count=0,
-                            has_media=0,
+                            has_media=1 if media_path else 0,
                             published=1,
                         )
                         print(f"[REDDIT] Published: {headline[:50]}")
