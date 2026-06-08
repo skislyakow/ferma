@@ -385,6 +385,39 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if body:
                         text = f"{title}\n\n{body}"
                     text = strip_html(text)
+
+                    # Extract image from Reddit RSS media:content
+                    media_path = None
+                    media_type = "photo"
+                    try:
+                        media_url = None
+                        if hasattr(entry, "media_content") and entry.media_content:
+                            for m in entry.media_content:
+                                if m.get("medium") == "image" or m.get("url", "").lower().endswith((".jpg", ".jpeg", ".png", ".gif")):
+                                    media_url = m["url"]
+                                    break
+                        if not media_url and hasattr(entry, "links"):
+                            for link in entry.links:
+                                if link.get("rel") == "enclosure" and link.get("type", "").startswith("image/"):
+                                    media_url = link["href"]
+                                    break
+                        if media_url:
+                            def _dl():
+                                import requests as _req
+                                r = _req.get(media_url, timeout=15)
+                                if r.status_code == 200:
+                                    os.makedirs("media", exist_ok=True)
+                                    ext = media_url.rsplit(".", 1)[-1].split("?")[0]
+                                    fname = f"reddit_{pid}.{ext}"
+                                    fpath = os.path.join("media", fname)
+                                    with open(fpath, "wb") as f:
+                                        f.write(r.content)
+                                    return fpath
+                                return None
+                            media_path = await asyncio.to_thread(_dl)
+                    except Exception as e:
+                        print(f"[REDDIT] Media download failed: {e}")
+                        media_path = None
                     text = re.sub(r'(?:\b(?:submitted|posted|published|provided|sent|by)\s+(?:by\s+)?/?u/\S+|comments?\s*(?:share|save|report)?)\s*', '', text, flags=re.IGNORECASE).strip()
                     text = re.sub(r'\s*\[link\]\s*\[\]\s*', '', text).strip()
                     text = re.sub(r'\s*\(paywall\)\s*', '', text, flags=re.IGNORECASE).strip()
@@ -439,8 +472,9 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     total_published = db.get_stats()["published"]
                     total_published += 1
 
-                    media_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
-                    media_type = "photo"
+                    if not media_path:
+                        media_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
+                        media_type = "photo"
 
                     success = pub.publish(
                         text=post_text,
