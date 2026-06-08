@@ -47,14 +47,19 @@ def is_russian(text: str) -> bool:
     return bool(re.search(r'[\u0400-\u04FF]', text))
 
 
-def format_post(headline: str, body: str) -> str:
+def _repost_link(target_channel: str) -> str:
+    username = target_channel.lstrip("@")
+    return f'<a href="https://t.me/{username}">⚡️ RE:POST</a>'
+
+
+def format_post(headline: str, body: str, target_channel: str = "") -> str:
     headline = re.sub(r'\s+', ' ', headline).strip()
     body = re.sub(r'\n{3,}', '\n\n', body).strip()
     parts = [f"👉 {headline}"]
     if body:
         parts.append(body)
     parts.append("")
-    parts.append("⚡️ RE:POST")
+    parts.append(_repost_link(target_channel) if target_channel else "⚡️ RE:POST")
     return "\n".join(parts)
 
 
@@ -139,7 +144,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     lines = translated.strip().split("\n")
     headline = lines[0]
     body = "\n".join(lines[1:])
-    post = format_post(headline, body)
+    post = format_post(headline, body, cfg["TARGET_CHANNEL"])
 
     has_media = 1 if media_path else 0
 
@@ -159,6 +164,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         cpa_every=cfg["CPA_INSERT_EVERY"],
         media_path=media_path,
         media_type=media_type,
+        parse_mode="HTML",
     )
 
     if success:
@@ -296,7 +302,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 await asyncio.sleep(300)
                 continue
 
-            post_text = f'{text}\n\n⚡️ RE:POST - {source_channel}'
+            post_text = f'{text}\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
 
             # Use fallback image if no media
             m_path, m_type = media_path, media_type or "photo"
@@ -315,6 +321,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 cpa_every=cfg["CPA_INSERT_EVERY"],
                 media_path=m_path,
                 media_type=m_type,
+                parse_mode="HTML",
             )
 
             if success:
@@ -460,7 +467,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     post_text = f"👉 {headline}"
                     if body:
                         post_text += f"\n\n{body}"
-                    post_text += f"\n\n⚡️ RE:POST - {source_channel}"
+                    post_text += f"\n\n{_repost_link(cfg['TARGET_CHANNEL'])} - {source_channel}"
 
                     total_published = db.get_stats()["published"]
                     total_published += 1
