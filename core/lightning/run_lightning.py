@@ -273,39 +273,52 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
             post_id, source_channel, text, _, media_path, _, media_type = post
 
             if not text or not text.strip():
-                db.mark_skipped(post_id)
-                await asyncio.sleep(300)
-                continue
+                if media_path:
+                    text = ""
+                else:
+                    db.mark_skipped(post_id)
+                    await asyncio.sleep(300)
+                    continue
 
-            text = text.strip()
-            text = re.sub(r'(\n@\w+)+$', '', text)
-            text = re.sub(r'[\u200b\u200c\u200d\ufeff\u00a0]', '', text)
+            if text:
+                text = text.strip()
+                text = re.sub(r'(\n@\w+)+$', '', text)
+                text = re.sub(r'[\u200b\u200c\u200d\ufeff\u00a0]', '', text)
 
-            if len(text) < 40:
-                print(f"[RU] Too short ({len(text)} chars) from {source_channel}, skipping")
-                db.mark_skipped(post_id)
-                await asyncio.sleep(300)
-                continue
+            if text and len(text) < 40:
+                if media_path:
+                    text = ""
+                else:
+                    print(f"[RU] Too short ({len(text)} chars) from {source_channel}, skipping")
+                    db.mark_skipped(post_id)
+                    await asyncio.sleep(300)
+                    continue
 
-            if not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', text):
-                print(f"[RU] No visible text from {source_channel}, skipping")
-                db.mark_skipped(post_id)
-                await asyncio.sleep(300)
-                continue
+            if text and not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', text):
+                if media_path:
+                    text = ""
+                else:
+                    print(f"[RU] No visible text from {source_channel}, skipping")
+                    db.mark_skipped(post_id)
+                    await asyncio.sleep(300)
+                    continue
 
-            if is_blocked_content(text):
-                print(f"[RU] Blocked content from {source_channel}")
-                db.mark_skipped(post_id)
-                await asyncio.sleep(300)
-                continue
+            if text:
+                if is_blocked_content(text):
+                    print(f"[RU] Blocked content from {source_channel}")
+                    db.mark_skipped(post_id)
+                    await asyncio.sleep(300)
+                    continue
+                if db.content_exists(text):
+                    print(f"[RU] Duplicate content from {source_channel}")
+                    db.mark_skipped(post_id)
+                    await asyncio.sleep(300)
+                    continue
 
-            if db.content_exists(text):
-                print(f"[RU] Duplicate content from {source_channel}")
-                db.mark_skipped(post_id)
-                await asyncio.sleep(300)
-                continue
-
-            post_text = f'{text}\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
+            if text:
+                post_text = f'{text}\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
+            else:
+                post_text = f'👉 Кадр дня\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
 
             # Use fallback image if no media
             m_path, m_type = media_path, media_type or "photo"
