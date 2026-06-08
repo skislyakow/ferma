@@ -455,7 +455,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
                     lines = translated.strip().split("\n")
                     headline = lines[0].strip()
-                    if not headline or len(headline) < 10 or re.match(r'^[rR]/\w+$', headline) or 'reddit:' in headline.lower():
+                    if not headline or len(headline) < 10 or headline.lower().startswith('reddit') or re.match(r'^[rR]/\w+$', headline) or 'reddit:' in headline.lower():
                         print(f"[REDDIT] Empty/useless headline, skipping")
                         continue
                     body = "\n".join(lines[1:]).strip()
