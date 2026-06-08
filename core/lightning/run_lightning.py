@@ -142,7 +142,10 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         return False
 
     lines = translated.strip().split("\n")
-    headline = lines[0]
+    headline = lines[0].strip()
+    if not headline or len(headline) < 10:
+        print(f"[RE:POST] Empty/useless headline, skipping")
+        return False
     body = "\n".join(lines[1:])
     post = format_post(headline, body, cfg["TARGET_CHANNEL"])
 
