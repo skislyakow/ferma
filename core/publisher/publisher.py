@@ -88,6 +88,15 @@ class Publisher:
         text = self._clean_footers(text)
         text = self._inject_cpa(text, total_published, cpa_links or [], cpa_every)
 
+        # Minimum content guard — prevent empty/near-empty posts
+        if len(text.strip()) < 20:
+            if media_path:
+                text = "👉 Кадр дня"
+                print("[Publisher] Text too short, using 'Кадр дня' fallback")
+            else:
+                print("[Publisher] Text too short, skipping")
+                return False
+
         try:
             if media_path and media_type == "photo":
                 logo = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "repost2.png")
