@@ -391,7 +391,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if not text:
                         continue
 
-                    source_channel = f'<a href="https://www.reddit.com/r/{sub}/">reddit:r/{sub}</a>'
+                    source_channel = f'reddit/r/{sub}'
                     source_msg_id = zlib.crc32(pid.encode()) & 0x7FFFFFFF
 
                     if db.post_exists(source_channel, source_msg_id):

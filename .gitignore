@@ -49,3 +49,6 @@ IDEEV.md
 # Local scripts (not part of the farm)
 start_bot.ps1
 _deploy_*.py
+
+
+.venv
