@@ -349,16 +349,31 @@ async def channel_detail(name: str, token: str = Query(None)):
     status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
     chan_type = s.get('type', 'normal')
     type_tag = "⚡️ Lightning" if chan_type == 'lightning' else "📰 Normal"
-    extra_stats = ""
-    if chan_type == 'lightning':
-        rss = s.get('rss_feeds', [])
-        tele_donors = s.get('donors', 0)
-        extra_stats = f"""
-            <div class='stat'><span class='label'>Telegram доноры</span><span class='value'>{tele_donors}</span></div>
-            <div class='stat'><span class='label'>RSS фиды</span><span class='value'>{len(rss)}</span></div>
-        """
-        if rss:
-            extra_stats += "<div class='stat'><span class='label' style='align-self:start'>RSS источники</span><span class='value' style='font-size:12px'>" + "<br>".join(rss) + "</span></div>"
+    def _render_sources_table(sources: list) -> str:
+        if not sources:
+            return "<div class='stat'><span class='label'>Нет источников</span></div>"
+        rows = "".join(
+            f"<tr><td><a href='https://t.me/{s['username']}' target='_blank'>@{s['username']}</a></td>"
+            f"<td>{s['title']}</td></tr>"
+            for s in sources
+        )
+        return f"<table><tr><th>Ссылка</th><th>Название</th></tr>{rows}</table>"
+
+    source_channels = s.get('source_channels', [])
+    ru_source_channels = s.get('ru_source_channels', [])
+    rss = s.get('rss_feeds', [])
+    reddit = s.get('reddit_subreddits', [])
+    sources_html = ""
+    if source_channels:
+        sources_html += f"<div class='card'><h2>Telegram доноры ({len(source_channels)})</h2>{_render_sources_table(source_channels)}</div>"
+    if ru_source_channels:
+        sources_html += f"<div class='card'><h2>RU доноры ({len(ru_source_channels)})</h2>{_render_sources_table(ru_source_channels)}</div>"
+    if rss:
+        rss_rows = "".join(f"<tr><td><a href='{f}' target='_blank' style='font-size:12px'>{f}</a></td></tr>" for f in rss)
+        sources_html += f"<div class='card'><h2>RSS фиды ({len(rss)})</h2><table><tr><th>URL</th></tr>{rss_rows}</table></div>"
+    if reddit:
+        reddit_rows = "".join(f"<tr><td><a href='https://reddit.com/r/{r}' target='_blank'>r/{r}</a></td></tr>" for r in reddit)
+        sources_html += f"<div class='card'><h2>Reddit ({len(reddit)})</h2><table><tr><th>Сабреддит</th></tr>{reddit_rows}</table></div>"
     body = f"""
     <h1>{s['name']} <span style='font-size:14px;color:#8b949e'>@{s['target']} {type_tag}</span></h1>
     <div class='grid'>
@@ -366,7 +381,7 @@ async def channel_detail(name: str, token: str = Query(None)):
             <h2>Статистика</h2>
             <div class='stat'><span class='label'>Статус</span><span class='value'>{status_tag}</span></div>
             <div class='stat'><span class='label'>Подписчики</span><span class='value'>{s['subscribers']}</span></div>
-            {extra_stats}
+            <div class='stat'><span class='label'>Доноры</span><span class='value'>{s['donors']}</span></div>
             <div class='stat'><span class='label'>БД всего</span><span class='value'>{s['db']['total']}</span></div>
             <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s['db']['published']}</span></div>
             <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s['db']['skipped']}</span></div>
@@ -378,6 +393,7 @@ async def channel_detail(name: str, token: str = Query(None)):
             <p style='margin-top:10px'><a href='/logs/{name}?token={token}'>Логи</a></p>
         </div>
     </div>
+    {sources_html}
     <div class='card'>
         <h2>Действия</h2>
         <p style='margin-top:8px'>

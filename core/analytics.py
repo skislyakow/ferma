@@ -16,6 +16,15 @@ class FarmAnalytics:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def _resolve_channel_name(self, token: str, username: str) -> str:
+        r = self._bot_api(token, "getChat", {"chat_id": f"@{username}"})
+        if r.get("ok"):
+            return r["result"].get("title", username)
+        return username
+
+    def _parse_channel_list(self, raw: str) -> list[str]:
+        return [x.strip().lstrip("@") for x in raw.split(",") if x.strip()]
+
     def channel_stats(self, name: str) -> dict:
         env_path = os.path.join(self.channels_dir, name, ".env")
         db_path = os.path.join(self.channels_dir, name, "posts.db")
@@ -26,16 +35,32 @@ class FarmAnalytics:
         cfg = dotenv_values(env_path)
         token = cfg.get("BOT_TOKEN", "")
         target = cfg.get("TARGET_CHANNEL", "").lstrip("@")
-        donors = cfg.get("SOURCE_CHANNELS", "").split(",")
         chan_type = cfg.get("CHANNEL_TYPE", "normal")
+
+        source_channels_raw = self._parse_channel_list(cfg.get("SOURCE_CHANNELS", ""))
         rss_feeds = [x.strip() for x in cfg.get("RSS_FEEDS", "").split(",") if x.strip()]
+        ru_sources_raw = self._parse_channel_list(cfg.get("RU_SOURCE_CHANNELS", ""))
+        reddit_subreddits = [x.strip() for x in cfg.get("REDDIT_SUBREDDITS", "").split(",") if x.strip()]
+
+        source_channels = []
+        for ch in source_channels_raw:
+            name_resolved = self._resolve_channel_name(token, ch)
+            source_channels.append({"username": ch, "title": name_resolved})
+
+        ru_source_channels = []
+        for ch in ru_sources_raw:
+            name_resolved = self._resolve_channel_name(token, ch)
+            ru_source_channels.append({"username": ch, "title": name_resolved})
 
         result = {
             "name": name,
             "target": target,
             "type": chan_type,
-            "donors": len([d for d in donors if d.strip()]),
+            "donors": len(source_channels),
+            "source_channels": source_channels,
             "rss_feeds": rss_feeds,
+            "ru_source_channels": ru_source_channels,
+            "reddit_subreddits": reddit_subreddits,
             "subscribers": 0,
             "last_posts": [],
             "db": {"total": 0, "published": 0, "skipped": 0, "video": 0},
