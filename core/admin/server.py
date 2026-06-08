@@ -178,6 +178,8 @@ async def add_channel_form(token: str = Query(None)):
             </div>
             <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' placeholder='+79001234567' required></div>
             <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' placeholder='https://feeds.bbci.co.uk/news/rss.xml,...'></div>
+            <div class='form-group'><label>RU доноры (через запятую)</label><input type='text' name='ru_source_channels' placeholder='@tass_agency,@rian_ru,...'></div>
+            <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' placeholder='worldnews,news,...'></div>
         </div>
         <div class='form-row'>
             <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='en'></div>
@@ -213,6 +215,8 @@ async def api_create_channel(
     api_hash: str = Form(""),
     phone: str = Form(""),
     rss_feeds: str = Form(""),
+    ru_source_channels: str = Form(""),
+    reddit_subreddits: str = Form(""),
 ):
     check_auth(token)
 
@@ -238,6 +242,8 @@ async def api_create_channel(
 
     is_lightning = channel_type == "lightning"
     rss_list = ",".join(x.strip() for x in rss_feeds.split(",") if x.strip())
+    ru_list = ",".join(x.strip() for x in ru_source_channels.split(",") if x.strip())
+    reddit_list = ",".join(x.strip() for x in reddit_subreddits.split(",") if x.strip())
 
     if is_lightning:
         env_content = f"""# RE:POST — Lightning News Channel
@@ -263,6 +269,8 @@ TARGET_LANG={target_lang}
 CPA_LINKS={cpa_list}
 CPA_INSERT_EVERY={cpa_insert_every}
 RSS_FEEDS={rss_list}
+RU_SOURCE_CHANNELS={ru_list}
+REDDIT_SUBREDDITS={reddit_list}
 """
     else:
         env_content = f"""# Normal channel
@@ -474,9 +482,12 @@ async def edit_channel_form(name: str, token: str = Query(None)):
         </div>
         <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' value='{}'></div>
         <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' value='{}'></div>
+        <div class='form-group'><label>RU доноры (через запятую)</label><input type='text' name='ru_source_channels' value='{}'></div>
+        <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' value='{}'></div>
         '''.format(
             v("TELEGRAM_API_ID"), v("TELEGRAM_API_HASH"),
-            v("TELEGRAM_PHONE"), v("RSS_FEEDS")
+            v("TELEGRAM_PHONE"), v("RSS_FEEDS"),
+            v("RU_SOURCE_CHANNELS"), v("REDDIT_SUBREDDITS")
         )}
         <div class='form-row'>
             <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='{v("SOURCE_LANG", "en")}'></div>
@@ -524,6 +535,8 @@ async def api_update_channel(
     api_hash: str = Form(""),
     phone: str = Form(""),
     rss_feeds: str = Form(""),
+    ru_source_channels: str = Form(""),
+    reddit_subreddits: str = Form(""),
 ):
     check_auth(token)
     validate_channel_name(name)
@@ -534,6 +547,8 @@ async def api_update_channel(
     sources = ",".join(x.strip() for x in source_channels.split(",") if x.strip())
     cpa_list = ",".join(x.strip() for x in cpa_links.split(",") if x.strip())
     rss_list = ",".join(x.strip() for x in rss_feeds.split(",") if x.strip())
+    ru_list = ",".join(x.strip() for x in ru_source_channels.split(",") if x.strip())
+    reddit_list = ",".join(x.strip() for x in reddit_subreddits.split(",") if x.strip())
     is_lightning = channel_type == "lightning"
 
     if is_lightning:
@@ -560,6 +575,8 @@ TARGET_LANG={target_lang}
 CPA_LINKS={cpa_list}
 CPA_INSERT_EVERY={cpa_insert_every}
 RSS_FEEDS={rss_list}
+RU_SOURCE_CHANNELS={ru_list}
+REDDIT_SUBREDDITS={reddit_list}
 """
     else:
         env_content = f"""# Normal channel
