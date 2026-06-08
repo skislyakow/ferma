@@ -296,7 +296,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 await asyncio.sleep(300)
                 continue
 
-            post_text = f'{text}\n\n{source_channel}\n\n⚡️ RE:POST'
+            post_text = f'{text}\n\n⚡️ RE:POST - {source_channel}'
 
             # Use fallback image if no media
             m_path, m_type = media_path, media_type or "photo"
@@ -460,7 +460,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     post_text = f"👉 {headline}"
                     if body:
                         post_text += f"\n\n{body}"
-                    post_text += f"\n\n{'—' * 15}\n{source_channel}\n\n⚡️ RE:POST"
+                    post_text += f"\n\n⚡️ RE:POST - {source_channel}"
 
                     total_published = db.get_stats()["published"]
                     total_published += 1
