@@ -25,4 +25,6 @@ def load_channel_config(env_path: str = None):
         "CPA_INSERT_EVERY": int(env.get("CPA_INSERT_EVERY", "3")),
         "REQUIRE_MEDIA": env.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes"),
         "REDDIT_INTERVAL": env.get("REDDIT_INTERVAL", "300"),
+        "VK_TOKEN": env.get("VK_TOKEN", ""),
+        "VK_GROUP_ID": env.get("VK_GROUP_ID", ""),
     }
