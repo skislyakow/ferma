@@ -70,6 +70,7 @@ DEFAULT_FILTERS = {
         "подписаться | сайт |",
         "#ъузнал",
         "подписывайся на readovka в макс",
+        "telegram | whatsapp | youtube | рассылка",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
