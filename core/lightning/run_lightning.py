@@ -72,6 +72,23 @@ def _crosspost_to_vk(media_path: str, headline: str, cfg: dict, tracker_path: st
         print(f"[VK] Failed to crosspost: {e}")
 
 
+def _vk_prepare_copy(media_path, cfg):
+    if cfg.get("VK_TOKEN") and media_path and media_path != REPOST_BANNER:
+        import shutil
+        cp = media_path + ".vktmp"
+        shutil.copy2(media_path, cp)
+        return cp
+    return None
+
+
+def _vk_cleanup(vk_copy):
+    if vk_copy and os.path.exists(vk_copy):
+        try:
+            os.remove(vk_copy)
+        except OSError:
+            pass
+
+
 def has_breaking_keyword(text: str) -> bool:
     t = text.lower()
     return any(kw in t for kw in BREAKING_KEYWORDS)
@@ -199,6 +216,8 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
 
     has_media = 1 if media_path else 0
 
+    vk_copy = _vk_prepare_copy(media_path, cfg)
+
     # Use repost.png as fallback image
     if not media_path and os.path.exists(REPOST_BANNER):
         media_path = REPOST_BANNER
@@ -206,10 +225,15 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
 
     if post is None:
         print(f"[RE:POST] No content to publish from {source_channel}")
+        if vk_copy:
+            _vk_cleanup(vk_copy)
         return False
 
     total_published = db.get_stats()["published"]
     total_published += 1
+
+    # Pass a copy to Publisher (it will delete it); keep original for VK
+    pub_media = vk_copy if vk_copy else media_path
 
     success = pub.publish(
         text=post,
@@ -217,7 +241,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         total_published=total_published,
         cpa_links=cfg["CPA_LINKS"],
         cpa_every=cfg["CPA_INSERT_EVERY"],
-        media_path=media_path,
+        media_path=pub_media,
         media_type=media_type,
         parse_mode="HTML",
     )
@@ -233,7 +257,10 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
             published=1,
         )
         print(f"[RE:POST] Published: {headline[:50]}")
-        _crosspost_to_vk(media_path, str(headline), cfg)
+        if vk_copy and os.path.exists(media_path):
+            _crosspost_to_vk(media_path, str(headline), cfg)
+        if vk_copy:
+            _vk_cleanup(vk_copy)
     return success
 
 
@@ -375,6 +402,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
 
             # Use fallback image if no media
             m_path, m_type = media_path, media_type or "photo"
+            vk_copy = _vk_prepare_copy(m_path, cfg)
             if not m_path:
                 m_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
                 m_type = "photo"
@@ -382,13 +410,14 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
             total_published = db.get_stats()["published"]
             total_published += 1
 
+            pub_media = vk_copy if vk_copy else m_path
             success = pub.publish(
                 text=post_text,
                 chat_id=cfg["TARGET_CHANNEL"],
                 total_published=total_published,
                 cpa_links=cfg["CPA_LINKS"],
                 cpa_every=cfg["CPA_INSERT_EVERY"],
-                media_path=m_path,
+                media_path=pub_media,
                 media_type=m_type,
                 parse_mode="HTML",
             )
@@ -396,7 +425,10 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
             if success:
                 db.mark_published(post_id)
                 print(f"[RU] Published from {source_channel}: {text[:50]}...")
-                _crosspost_to_vk(m_path, (text or "Кадр дня")[:100], cfg)
+                if vk_copy and os.path.exists(m_path):
+                    _crosspost_to_vk(m_path, (text or "Кадр дня")[:100], cfg)
+                if vk_copy:
+                    _vk_cleanup(vk_copy)
 
         except Exception as e:
             print(f"[RU] Error: {e}")
@@ -553,17 +585,19 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     total_published = db.get_stats()["published"]
                     total_published += 1
 
+                    vk_copy = _vk_prepare_copy(media_path, cfg)
                     if not media_path:
                         media_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
                         media_type = "photo"
 
+                    pub_media = vk_copy if vk_copy else media_path
                     success = pub.publish(
                         text=post_text,
                         chat_id=cfg["TARGET_CHANNEL"],
                         total_published=total_published,
                         cpa_links=cfg["CPA_LINKS"],
                         cpa_every=cfg["CPA_INSERT_EVERY"],
-                        media_path=media_path,
+                        media_path=pub_media,
                         media_type=media_type,
                         parse_mode="HTML",
                     )
@@ -579,7 +613,10 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                             published=1,
                         )
                         print(f"[REDDIT] Published: {headline[:50]}")
-                        _crosspost_to_vk(media_path, headline[:100], cfg)
+                        if vk_copy and os.path.exists(media_path):
+                            _crosspost_to_vk(media_path, headline[:100], cfg)
+                        if vk_copy:
+                            _vk_cleanup(vk_copy)
 
                 last_ts[sub] = newest_ts
 
