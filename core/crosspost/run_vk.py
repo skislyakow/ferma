@@ -64,7 +64,17 @@ def main(env_path: str):
 
     vk = VKPoster(vk_token, vk_group_id)
     offset = load_offset()
-    print(f"[VK] Watching @{target_channel} for photos...")
+
+    chan = target_channel.lstrip("@")
+    chat_resp = requests.get(
+        f"https://api.telegram.org/bot{bot_token}/getChat?chat_id=@{chan}",
+        timeout=15
+    ).json()
+    if not chat_resp.get("ok"):
+        print(f"[VK] Cannot resolve channel @{chan}: {chat_resp}")
+        sys.exit(1)
+    chat_id = str(chat_resp["result"]["id"])
+    print(f"[VK] Watching @{chan} ({chat_id}) for photos...")
 
     while True:
         try:
@@ -85,7 +95,7 @@ def main(env_path: str):
                     continue
 
                 chat = msg.get("chat", {})
-                if str(chat.get("id", "")).replace("-100", "") != target_channel.replace("@", ""):
+                if str(chat.get("id", "")) != chat_id:
                     continue
 
                 photos = msg.get("photo")
