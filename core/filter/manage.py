@@ -61,6 +61,8 @@ DEFAULT_FILTERS = {
         "не загружается видео",
         "визуал — в макс",
         "telegram | все каналы",
+        "все актуальные новости — в shot max",
+        "max.ru/shot",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
