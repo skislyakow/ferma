@@ -72,6 +72,7 @@ DEFAULT_FILTERS = {
         "подписывайся на readovka в макс",
         "telegram | whatsapp | youtube | рассылка",
         "телегу замедляют. спокойствие, всё прекрасно грузится и читается — в нашем канале макс",
+        "подпишись на rtvi в telegram | max",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
