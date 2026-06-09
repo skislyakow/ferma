@@ -63,6 +63,7 @@ DEFAULT_FILTERS = {
         "telegram | все каналы",
         "все актуальные новости — в shot max",
         "max.ru/shot",
+        "подписаться на rt",
     ],
     "ad_keywords": [
         "ретвит", "retweet", "репост",
