@@ -528,6 +528,12 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if not text:
                         continue
 
+                    # Skip posts that are just bare URLs with no meaningful text
+                    _no_urls = re.sub(r'https?://\S+', '', text).strip()
+                    if not _no_urls or re.match(r'^[\s\.,!?;:\-–—()\[\]"\'""«»…]+$', _no_urls):
+                        print(f"[REDDIT] Skip r/{sub}: only URL, no content")
+                        continue
+
                     source_channel = f'reddit/r/{sub}'
                     source_msg_id = zlib.crc32(pid.encode()) & 0x7FFFFFFF
 
