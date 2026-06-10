@@ -6,10 +6,12 @@ Usage:
     python core/crosspost/run_vk.py channels/repost/.env
 """
 import os
+import re
 import sys
 import time
 import json
 import asyncio
+import html as _html
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -79,7 +81,9 @@ async def main(env_path: str):
 
                     caption = msg.text or ""
                     if caption:
-                        post_text = f"\U0001f4f8 {caption}\n\nБольше новостей и кадров дня — в нашем Telegram-канале https://t.me/{chan}"
+                        clean = re.sub(r'<[^>]+>', '', caption)
+                        clean = _html.unescape(clean)
+                        post_text = f"\U0001f4f8 {clean}\n\nБольше новостей и кадров дня — в нашем Telegram-канале https://t.me/{chan}"
                     else:
                         post_text = f"\U0001f4f8 Кадр дня\n\nБольше новостей и кадров дня — в нашем Telegram-канале https://t.me/{chan}"
                     print(f"[VK] Photo #{msg_id}: {caption[:50] if caption else 'no text'}...")
