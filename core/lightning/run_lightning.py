@@ -56,7 +56,7 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
             return
         vk = VKPoster(cfg["VK_TOKEN"], cfg["VK_GROUP_ID"])
         attach = vk.upload_photo(media_path)
-        vk_text = f"{post_text}\n\nБольше новостей — https://t.me/{cfg['TARGET_CHANNEL'].lstrip('@')}"
+        vk_text = f"\U0001f4f8 {post_text}\n\nБольше новостей и кадров дня — в нашем Telegram-канале https://t.me/{cfg['TARGET_CHANNEL'].lstrip('@')}"
         vk.post_to_wall(message=vk_text, attachment=attach)
         posted.add(post_key)
         with open(tracker_path, "w") as f:
