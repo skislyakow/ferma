@@ -78,19 +78,16 @@ async def main(env_path: str):
                         continue
 
                     caption = msg.text or ""
-                    headline = caption.split("\n")[0][:100] if caption else "Кадр дня"
-                    print(f"[VK] Photo #{msg_id}: {headline[:50]}...")
+                    if caption:
+                        post_text = f"{caption}\n\nБольше новостей — https://t.me/{chan}"
+                    else:
+                        post_text = f"📸 Кадр дня\n\nБольше новостей — https://t.me/{chan}"
+                    print(f"[VK] Photo #{msg_id}: {caption[:50] if caption else 'no text'}...")
 
                     local = await client.download_media(msg, file=MEDIA_DIR)
                     if not local:
                         print(f"[VK] Failed to download #{msg_id}")
                         continue
-
-                    post_text = (
-                        f"📸 {headline}\n\n"
-                        f"Больше новостей и кадров дня — в нашем Telegram-канале "
-                        f"https://t.me/{chan}"
-                    )
 
                     try:
                         attachment = vk.upload_photo(local)

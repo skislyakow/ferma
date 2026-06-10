@@ -40,7 +40,7 @@ SESSION_FILE = "repost.session"
 VK_TRACKER_PATH = os.path.join(PROJECT_ROOT, "channels", "repost", "vk_posted.json")
 
 
-def _crosspost_to_vk(media_path: str, headline: str, cfg: dict, tracker_path: str = VK_TRACKER_PATH):
+def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: str = VK_TRACKER_PATH):
     if not cfg.get("VK_TOKEN") or not cfg.get("VK_GROUP_ID"):
         return
     if not media_path or media_path == REPOST_BANNER:
@@ -56,18 +56,12 @@ def _crosspost_to_vk(media_path: str, headline: str, cfg: dict, tracker_path: st
             return
         vk = VKPoster(cfg["VK_TOKEN"], cfg["VK_GROUP_ID"])
         attach = vk.upload_photo(media_path)
-        vk_text = (
-            f"\U0001f4f8 {headline[:100]}\n\n"
-            f"\u0411\u043e\u043b\u044c\u0448\u0435 \u043d\u043e\u0432\u043e\u0441\u0442\u0435\u0439 "
-            f"\u0438 \u043a\u0430\u0434\u0440\u043e\u0432 \u0434\u043d\u044f \u2014 \u0432 "
-            f"\u043d\u0430\u0448\u0435\u043c Telegram-\u043a\u0430\u043d\u0430\u043b\u0435 "
-            f"https://t.me/{cfg['TARGET_CHANNEL'].lstrip('@')}"
-        )
+        vk_text = f"{post_text}\n\nБольше новостей — https://t.me/{cfg['TARGET_CHANNEL'].lstrip('@')}"
         vk.post_to_wall(message=vk_text, attachment=attach)
         posted.add(post_key)
         with open(tracker_path, "w") as f:
             json.dump(list(posted), f)
-        print(f"[VK] Crossposted: {headline[:50]}...")
+        print(f"[VK] Crossposted: {post_text[:50]}...")
     except Exception as e:
         print(f"[VK] Failed to crosspost: {e}")
 
@@ -258,7 +252,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         )
         print(f"[RE:POST] Published: {headline[:50]}")
         if vk_copy and os.path.exists(media_path):
-            _crosspost_to_vk(media_path, str(headline), cfg)
+            _crosspost_to_vk(media_path, post, cfg)
         if vk_copy:
             _vk_cleanup(vk_copy)
     return success
@@ -426,7 +420,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 db.mark_published(post_id)
                 print(f"[RU] Published from {source_channel}: {text[:50]}...")
                 if vk_copy and os.path.exists(m_path):
-                    _crosspost_to_vk(m_path, (text or "Кадр дня")[:100], cfg)
+                    _crosspost_to_vk(m_path, post_text, cfg)
                 if vk_copy:
                     _vk_cleanup(vk_copy)
 
@@ -620,7 +614,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         )
                         print(f"[REDDIT] Published: {headline[:50]}")
                         if vk_copy and os.path.exists(media_path):
-                            _crosspost_to_vk(media_path, headline[:100], cfg)
+                            _crosspost_to_vk(media_path, post_text, cfg)
                         if vk_copy:
                             _vk_cleanup(vk_copy)
 
