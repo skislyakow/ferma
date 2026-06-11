@@ -113,6 +113,7 @@ AD_BLOCKLIST = [
     "news app", "follow news", "match your interests",
     "download the app", "download our app", "get the app",
     "available on", "subscribe for", "sign up",
+    "оккупированн", "окуппированн",
 ]
 
 SOURCE_FOOTER_PATTERNS = [
