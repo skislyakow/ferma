@@ -57,6 +57,16 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
         vk = VKPoster(cfg["VK_TOKEN"], cfg["VK_GROUP_ID"])
         attach = vk.upload_photo(media_path)
         vk_text = strip_html(post_text)
+        _ff = load_filters().get("footer_patterns", [])
+        vk_lines = vk_text.split("\n")
+        vk_clean = [vk_lines[0]]
+        for _l in vk_lines[1:]:
+            _s = _l.strip().lower()
+            if any(_p in _s or _s.startswith(_p) for _p in _ff):
+                continue
+            if _l.strip():
+                vk_clean.append(_l)
+        vk_text = re.sub(r"\n{3,}", "\n\n", "\n".join(vk_clean).strip())
         vk_text = f"\U0001f4f8 {vk_text}\n\nБольше новостей и кадров дня — в нашем Telegram-канале https://t.me/{cfg['TARGET_CHANNEL'].lstrip('@')}"
         vk.post_to_wall(message=vk_text, attachment=attach)
         posted.add(post_key)
