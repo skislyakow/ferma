@@ -140,6 +140,11 @@ class Publisher:
                     sent_type = "photo"
 
             resp.raise_for_status()
+            result = resp.json()
+            if not result.get("ok"):
+                print(f"[Publisher] API error: {result.get('description', 'unknown')}")
+                self._cleanup_media(media_path)
+                return False
             print(f"[Publisher] OK ({sent_type})")
             self._cleanup_media(media_path)
             return True
