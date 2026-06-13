@@ -20,7 +20,10 @@ class VKPoster:
             "v": self.api_v,
         })
         resp = requests.post(f"{VK_API}/{method}", data=params, timeout=30)
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:
+            raise Exception(f"VK API returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
         if data.get("error"):
             raise Exception(f"VK API error [{data['error']['error_code']}]: {data['error']['error_msg']}")
         return data.get("response")
@@ -36,7 +39,11 @@ class VKPoster:
         upload_url = upload_data["upload_url"]
 
         with open(file_path, "rb") as f:
-            raw = requests.post(upload_url, files={"photo": f}, timeout=60).json()
+            resp = requests.post(upload_url, files={"photo": f}, timeout=60)
+            try:
+                raw = resp.json()
+            except ValueError:
+                raise Exception(f"VK upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
 
         saved = self._call("photos.saveWallPhoto", {
             "group_id": self.group_id,
