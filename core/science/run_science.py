@@ -144,33 +144,52 @@ def download_reddit_video(video_url, filename):
             print(f"[Science] DASH manifest {r.status_code}")
             return None
 
-        base_urls = re.findall(r'<BaseURL>([^<]+)</BaseURL>', r.text)
-        has_audio = 'contentType="audio"' in r.text
+        text = r.text
+        has_audio = 'contentType="audio"' in text
+
+        video_rep = re.findall(
+            r'<Representation[^>]+bandwidth="(\d+)"[^>]+height="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+            text, re.DOTALL
+        )
+        if not video_rep:
+            print("[Science] No video representations found")
+            return None
+
+        best = max(video_rep, key=lambda x: int(x[1]))
+        video_base = best[2]
+        video_height = best[1]
+
+        audio_base = None
+        if has_audio:
+            audio_section = text[text.index('contentType="audio"'):]
+            audio_rep = re.findall(
+                r'<Representation[^>]+bandwidth="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+                audio_section, re.DOTALL
+            )
+            if audio_rep:
+                best_audio = max(audio_rep, key=lambda x: int(x[0]))
+                audio_base = best_audio[1]
 
         video_file = None
         audio_file = None
         merged = os.path.join(MEDIA_DIR, f"{filename}.mp4")
 
-        for base in base_urls:
-            if base.startswith("CMAF_") and not base.startswith("CMAF_AUDIO_") and not video_file:
-                url = f"https://v.redd.it/{video_id}/{base}"
-                vr = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
-                vr.raise_for_status()
-                video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
-                with open(video_file, "wb") as f:
-                    for chunk in vr.iter_content(8192):
-                        f.write(chunk)
+        url = f"https://v.redd.it/{video_id}/{video_base}"
+        vr = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+        vr.raise_for_status()
+        video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
+        with open(video_file, "wb") as f:
+            for chunk in vr.iter_content(8192):
+                f.write(chunk)
 
-        if has_audio:
-            for base in base_urls:
-                if base.startswith("CMAF_AUDIO_") and not audio_file:
-                    url = f"https://v.redd.it/{video_id}/{base}"
-                    ar = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
-                    ar.raise_for_status()
-                    audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
-                    with open(audio_file, "wb") as f:
-                        for chunk in ar.iter_content(8192):
-                            f.write(chunk)
+        if audio_base:
+            url = f"https://v.redd.it/{video_id}/{audio_base}"
+            ar = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+            ar.raise_for_status()
+            audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
+            with open(audio_file, "wb") as f:
+                for chunk in ar.iter_content(8192):
+                    f.write(chunk)
 
         if video_file and audio_file:
             import subprocess
@@ -182,6 +201,7 @@ def download_reddit_video(video_url, filename):
             if result.returncode == 0:
                 os.remove(video_file)
                 os.remove(audio_file)
+                print(f"[Science] Merged {video_height}p video + audio")
                 return merged
             else:
                 print(f"[Science] ffmpeg merge failed: {result.stderr[:200]}")
@@ -190,6 +210,7 @@ def download_reddit_video(video_url, filename):
             os.rename(video_file, merged)
             if audio_file and os.path.exists(audio_file):
                 os.remove(audio_file)
+            print(f"[Science] Downloaded {video_height}p video (no audio)")
             return merged
 
         return None
