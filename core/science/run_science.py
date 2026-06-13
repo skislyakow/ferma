@@ -11,6 +11,7 @@ import time
 import json
 import re
 import asyncio
+from html import unescape
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -43,21 +44,64 @@ def fetch_entries(subreddit):
     return feed.entries
 
 
-def extract_image_url(entry):
+def extract_image_urls(entry):
+    urls = []
     summary = (entry.get("summary") or entry.get("description") or "")
-    m = re.search(r'<img[^>]+src="([^"]+)"', summary)
-    if m:
-        from html import unescape
-        return unescape(m.group(1))
+    for m in re.finditer(r'<img[^>]+src="([^"]+)"', summary):
+        url = unescape(m.group(1))
+        if url not in urls:
+            urls.append(url)
 
-    link = entry.get("link", "")
-    if any(link.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp")):
-        return link
+    if not urls:
+        link = entry.get("link", "")
+        if any(link.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp")):
+            urls.append(link)
+        elif "i.redd.it" in link:
+            urls.append(link)
 
-    if "i.redd.it" in link:
-        return link
+    return urls
 
-    return None
+
+def fetch_reddit_images(post_url):
+    import requests
+    try:
+        json_url = post_url.rstrip("/") + ".json"
+        r = requests.get(json_url, timeout=15, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
+        r.raise_for_status()
+        data = r.json()
+        post_data = data[0]["data"]["children"][0]["data"]
+
+        images = []
+
+        if post_data.get("is_gallery"):
+            media_metadata = post_data.get("media_metadata", {})
+            for item_id, meta in media_metadata.items():
+                if meta.get("status") == "valid":
+                    s = meta.get("s", {})
+                    img_url = s.get("u") or s.get("gif") or ""
+                    img_url = unescape(img_url)
+                    if img_url and img_url not in images:
+                        images.append(img_url)
+        else:
+            preview = post_data.get("preview", {}).get("images", [])
+            if preview:
+                src = preview[0].get("source", {})
+                img_url = unescape(src.get("url", ""))
+                if img_url:
+                    images.append(img_url)
+
+            post_url_str = post_data.get("url_overridden_by_dest") or post_data.get("url", "")
+            if post_url_str and "i.redd.it" in post_url_str:
+                base = post_url_str.split("?")[0]
+                if base not in images:
+                    images.append(base)
+
+        return images
+    except Exception as e:
+        print(f"[Science] Reddit JSON fetch failed: {e}")
+        return []
 
 
 def download_image(url, filename):
@@ -77,10 +121,8 @@ def download_image(url, filename):
         return None
 
 
-def format_post(title, url, subreddit):
-    link = f"https://www.reddit.com{url}" if url.startswith("/") else url
-    text = f"🔬 {title}\n\n🔗 Источник: Reddit r/{subreddit}\n\n{link}"
-    return text
+def format_post(title):
+    return f"🔬 {title}"
 
 
 async def main(env_path: str):
@@ -115,37 +157,50 @@ async def main(env_path: str):
 
                 title = (entry.get("title") or "").strip()
                 link = entry.get("link", "")
-                summary = (entry.get("summary") or entry.get("description") or "")
 
                 if not title:
                     continue
 
                 title = re.sub(r'\s+', ' ', title).strip()
 
-                image_url = extract_image_url(entry)
-                media_path = None
-                if image_url:
-                    media_path = await asyncio.to_thread(download_image, image_url, f"sci_{pid}")
+                image_urls = extract_image_urls(entry)
 
-                post_text = format_post(title, link, subreddit)
+                if len(image_urls) <= 1 and link:
+                    reddit_images = await asyncio.to_thread(fetch_reddit_images, link)
+                    if reddit_images:
+                        image_urls = reddit_images
+
+                downloaded = []
+                for i, img_url in enumerate(image_urls):
+                    suffix = f"_{i}" if len(image_urls) > 1 else ""
+                    path = await asyncio.to_thread(download_image, img_url, f"sci_{pid}{suffix}")
+                    if path:
+                        downloaded.append(path)
+
+                post_text = format_post(title)
 
                 try:
-                    attachment = None
-                    if media_path:
-                        attachment = vk.upload_photo(media_path)
-                    vk.post_to_wall(message=post_text, attachment=attachment)
+                    attachments = []
+                    for path in downloaded:
+                        att = vk.upload_photo(path)
+                        attachments.append(att)
+
+                    att_str = ",".join(attachments) if attachments else None
+                    vk.post_to_wall(message=post_text, attachment=att_str)
                     published.add(pid)
                     save_published(published)
                     new_count += 1
-                    print(f"[Science] Posted: {title[:60]}...")
+                    photo_count = len(attachments)
+                    print(f"[Science] Posted ({photo_count} photo{'s' if photo_count != 1 else ''}): {title[:60]}...")
                 except Exception as e:
                     print(f"[Science] Failed to post: {e}")
 
-                if media_path and os.path.exists(media_path):
-                    try:
-                        os.remove(media_path)
-                    except OSError:
-                        pass
+                for path in downloaded:
+                    if os.path.exists(path):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
 
                 await asyncio.sleep(3)
 
