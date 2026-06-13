@@ -65,11 +65,14 @@ def extract_image_urls(entry):
 def fetch_reddit_images(post_url):
     import requests
     try:
-        json_url = post_url.rstrip("/") + ".json"
+        old_url = post_url.replace("www.reddit.com", "old.reddit.com")
+        json_url = old_url.rstrip("/") + ".json"
         r = requests.get(json_url, timeout=15, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
-        r.raise_for_status()
+        if r.status_code != 200:
+            print(f"[Science] Reddit JSON {r.status_code}, skipping")
+            return []
         data = r.json()
         post_data = data[0]["data"]["children"][0]["data"]
 
