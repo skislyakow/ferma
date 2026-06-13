@@ -49,6 +49,7 @@ def extract_image_urls(entry):
     summary = (entry.get("summary") or entry.get("description") or "")
     for m in re.finditer(r'<img[^>]+src="([^"]+)"', summary):
         url = unescape(m.group(1))
+        url = re.sub(r'\?width=\d+&.*', '', url)
         if url not in urls:
             urls.append(url)
 
