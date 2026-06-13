@@ -63,3 +63,25 @@ class VKPoster:
         if attachment:
             params["attachments"] = attachment
         return self._call("wall.post", params)
+
+    def upload_video(self, file_path: str, title: str = "") -> str:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Video not found: {file_path}")
+
+        save_data = self._call("video.save", {
+            "group_id": self.group_id,
+            "name": title or "Video",
+            "wallpost": 0,
+        })
+        upload_url = save_data["upload_url"]
+
+        with open(file_path, "rb") as f:
+            resp = requests.post(upload_url, files={"video_file": f}, timeout=120)
+            try:
+                result = resp.json()
+            except ValueError:
+                raise Exception(f"VK video upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
+
+        video_id = result.get("video_id")
+        owner_id = result.get("owner_id", self.owner_id)
+        return f"video{owner_id}_{video_id}"

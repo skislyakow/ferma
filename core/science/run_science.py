@@ -125,6 +125,79 @@ def download_image(url, filename):
         return None
 
 
+def detect_video(entry):
+    summary = (entry.get("summary") or entry.get("description") or "")
+    m = re.search(r'href="(https?://v\.redd\.it/[^"]+)"', summary)
+    if m:
+        url = m.group(1).split("?")[0].rstrip("/")
+        return url
+    return None
+
+
+def download_reddit_video(video_url, filename):
+    import requests
+    try:
+        video_id = video_url.rstrip("/").split("/")[-1]
+        manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
+        r = requests.get(manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            print(f"[Science] DASH manifest {r.status_code}")
+            return None
+
+        base_urls = re.findall(r'<BaseURL>([^<]+)</BaseURL>', r.text)
+        has_audio = 'contentType="audio"' in r.text
+
+        video_file = None
+        audio_file = None
+        merged = os.path.join(MEDIA_DIR, f"{filename}.mp4")
+
+        for base in base_urls:
+            if base.startswith("CMAF_") and not base.startswith("CMAF_AUDIO_") and not video_file:
+                url = f"https://v.redd.it/{video_id}/{base}"
+                vr = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+                vr.raise_for_status()
+                video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
+                with open(video_file, "wb") as f:
+                    for chunk in vr.iter_content(8192):
+                        f.write(chunk)
+
+        if has_audio:
+            for base in base_urls:
+                if base.startswith("CMAF_AUDIO_") and not audio_file:
+                    url = f"https://v.redd.it/{video_id}/{base}"
+                    ar = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+                    ar.raise_for_status()
+                    audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
+                    with open(audio_file, "wb") as f:
+                        for chunk in ar.iter_content(8192):
+                            f.write(chunk)
+
+        if video_file and audio_file:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", video_file, "-i", audio_file,
+                 "-c:v", "copy", "-c:a", "aac", "-strict", "experimental", merged],
+                capture_output=True, timeout=60
+            )
+            if result.returncode == 0:
+                os.remove(video_file)
+                os.remove(audio_file)
+                return merged
+            else:
+                print(f"[Science] ffmpeg merge failed: {result.stderr[:200]}")
+
+        if video_file:
+            os.rename(video_file, merged)
+            if audio_file and os.path.exists(audio_file):
+                os.remove(audio_file)
+            return merged
+
+        return None
+    except Exception as e:
+        print(f"[Science] Video download failed: {e}")
+        return None
+
+
 def format_post(title):
     return f"🔬 {title}"
 
@@ -166,45 +239,47 @@ async def main(env_path: str):
                     continue
 
                 title = re.sub(r'\s+', ' ', title).strip()
-
-                image_urls = extract_image_urls(entry)
-
-                if len(image_urls) <= 1 and link:
-                    reddit_images = await asyncio.to_thread(fetch_reddit_images, link)
-                    if reddit_images:
-                        image_urls = reddit_images
-
-                downloaded = []
-                for i, img_url in enumerate(image_urls):
-                    suffix = f"_{i}" if len(image_urls) > 1 else ""
-                    path = await asyncio.to_thread(download_image, img_url, f"sci_{pid}{suffix}")
-                    if path:
-                        downloaded.append(path)
-
                 post_text = format_post(title)
 
-                try:
-                    attachments = []
-                    for path in downloaded:
-                        att = vk.upload_photo(path)
-                        attachments.append(att)
+                video_url = detect_video(entry)
+                media_path = None
+                media_type = "photo"
 
-                    att_str = ",".join(attachments) if attachments else None
-                    vk.post_to_wall(message=post_text, attachment=att_str)
+                if video_url:
+                    media_path = await asyncio.to_thread(download_reddit_video, video_url, f"sci_{pid}")
+                    if media_path:
+                        media_type = "video"
+
+                if not media_path:
+                    image_urls = extract_image_urls(entry)
+                    if len(image_urls) <= 1 and link:
+                        reddit_images = await asyncio.to_thread(fetch_reddit_images, link)
+                        if reddit_images:
+                            image_urls = reddit_images
+                    if image_urls:
+                        media_path = await asyncio.to_thread(download_image, image_urls[0], f"sci_{pid}")
+
+                try:
+                    attachment = None
+                    if media_path:
+                        if media_type == "video":
+                            attachment = vk.upload_video(media_path, title=title[:100])
+                        else:
+                            attachment = vk.upload_photo(media_path)
+                    vk.post_to_wall(message=post_text, attachment=attachment)
                     published.add(pid)
                     save_published(published)
                     new_count += 1
-                    photo_count = len(attachments)
-                    print(f"[Science] Posted ({photo_count} photo{'s' if photo_count != 1 else ''}): {title[:60]}...")
+                    label = "video" if media_type == "video" else "photo"
+                    print(f"[Science] Posted ({label}): {title[:60]}...")
                 except Exception as e:
                     print(f"[Science] Failed to post: {e}")
 
-                for path in downloaded:
-                    if os.path.exists(path):
-                        try:
-                            os.remove(path)
-                        except OSError:
-                            pass
+                if media_path and os.path.exists(media_path):
+                    try:
+                        os.remove(media_path)
+                    except OSError:
+                        pass
 
                 await asyncio.sleep(3)
 
