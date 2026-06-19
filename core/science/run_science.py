@@ -40,7 +40,13 @@ def fetch_entries(subreddit):
     import feedparser
     url = f"https://www.reddit.com/r/{subreddit}/new/.rss"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    feed = feedparser.parse(url, agent=headers["User-Agent"])
+    for attempt in range(3):
+        feed = feedparser.parse(url, agent=headers["User-Agent"])
+        if feed.entries:
+            return feed.entries
+        if attempt < 2:
+            print(f"[Science] RSS empty (attempt {attempt+1}/3), retrying in 30s...")
+            time.sleep(30)
     return feed.entries
 
 
