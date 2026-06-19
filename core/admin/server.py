@@ -120,7 +120,7 @@ async def dashboard(token: str = Query(None), msg: str = None):
         running = screen_running(s["name"])
         status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
         chan_type = s.get('type', 'normal')
-        type_tag = "⚡️ Lightning" if chan_type == 'lightning' else "📰 Normal"
+        type_tag = "⚡️ Lightning" if chan_type == 'lightning' else "🔵 VK" if chan_type == 'vk' else "📰 Normal"
         extra = ""
         if chan_type == 'lightning':
             rss = s.get('rss_feeds', [])
@@ -356,7 +356,7 @@ async def channel_detail(name: str, token: str = Query(None)):
     running = screen_running(name)
     status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
     chan_type = s.get('type', 'normal')
-    type_tag = "⚡️ Lightning" if chan_type == 'lightning' else "📰 Normal"
+    type_tag = "⚡️ Lightning" if chan_type == 'lightning' else "🔵 VK" if chan_type == 'vk' else "📰 Normal"
     def _render_sources_table(sources: list) -> str:
         if not sources:
             return "<div class='stat'><span class='label'>Нет источников</span></div>"
@@ -612,6 +612,8 @@ async def view_logs(name: str, lines: int = 50, token: str = Query(None)):
     check_auth(token)
     validate_channel_name(name)
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
+    if not os.path.exists(log_path):
+        log_path = os.path.join(CHANNELS_DIR, name, "logs", f"{name}.log")
     if not os.path.exists(log_path):
         return HTMLResponse(f"Нет логов для '{name}'", 404)
     with open(log_path, "r", encoding="utf-8", errors="replace") as f:

@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 import sqlite3
 from datetime import datetime
@@ -25,6 +26,14 @@ class FarmAnalytics:
     def _parse_channel_list(self, raw: str) -> list[str]:
         return [x.strip().lstrip("@") for x in raw.split(",") if x.strip()]
 
+    def _vk_api(self, token: str, method: str, params: dict = None):
+        url = f"https://api.vk.com/method/{method}"
+        try:
+            r = requests.get(url, params={**(params or {}), "access_token": token, "v": "5.199"}, timeout=10)
+            return r.json()
+        except Exception:
+            return {"error": "request failed"}
+
     def channel_stats(self, name: str) -> dict:
         env_path = os.path.join(self.channels_dir, name, ".env")
         db_path = os.path.join(self.channels_dir, name, "posts.db")
@@ -36,6 +45,12 @@ class FarmAnalytics:
         token = cfg.get("BOT_TOKEN", "")
         target = cfg.get("TARGET_CHANNEL", "").lstrip("@")
         chan_type = cfg.get("CHANNEL_TYPE", "normal")
+        vk_token = cfg.get("VK_TOKEN", "")
+        vk_group_id = cfg.get("VK_GROUP_ID", "")
+
+        is_vk_only = bool(vk_token and vk_group_id and not token)
+        if is_vk_only:
+            chan_type = "vk"
 
         source_channels_raw = self._parse_channel_list(cfg.get("SOURCE_CHANNELS", ""))
         rss_feeds = [x.strip() for x in cfg.get("RSS_FEEDS", "").split(",") if x.strip()]
@@ -44,19 +59,25 @@ class FarmAnalytics:
 
         source_channels = []
         for ch in source_channels_raw:
-            name_resolved = self._resolve_channel_name(token, ch)
+            if token:
+                name_resolved = self._resolve_channel_name(token, ch)
+            else:
+                name_resolved = ch
             source_channels.append({"username": ch, "title": name_resolved})
 
         ru_source_channels = []
         for ch in ru_sources_raw:
-            name_resolved = self._resolve_channel_name(token, ch)
+            if token:
+                name_resolved = self._resolve_channel_name(token, ch)
+            else:
+                name_resolved = ch
             ru_source_channels.append({"username": ch, "title": name_resolved})
 
         result = {
             "name": name,
-            "target": target,
+            "target": target or f"VK {vk_group_id}",
             "type": chan_type,
-            "donors": len(source_channels),
+            "donors": len(source_channels) + len(rss_feeds) + len(reddit_subreddits),
             "source_channels": source_channels,
             "rss_feeds": rss_feeds,
             "ru_source_channels": ru_source_channels,
@@ -67,37 +88,53 @@ class FarmAnalytics:
             "running": False,
         }
 
-        # Subscribers
-        r = self._bot_api(token, "getChatMembersCount", {"chat_id": f"@{target}"})
-        if r.get("ok"):
-            result["subscribers"] = r["result"]
+        if is_vk_only:
+            r = self._vk_api(vk_token, "groups.getById", {"group_id": vk_group_id})
+            if "response" in r and r["response"].get("groups"):
+                result["subscribers"] = r["response"]["groups"][0].get("members_count", 0)
 
-        # Last 5 posts in channel
-        r = self._bot_api(token, "getUpdates", {"timeout": 0})
-        if r.get("ok") and r.get("result"):
-            posts = []
-            for update in reversed(r["result"]):
-                msg = update.get("channel_post") or update.get("message", {})
-                if msg.get("chat", {}).get("username", "").lower() == target.lower():
-                    posts.append({
-                        "id": msg["message_id"],
-                        "date": datetime.fromtimestamp(msg["date"]).isoformat(),
-                        "views": msg.get("views", 0),
-                        "reactions": len(msg.get("reactions", {}).get("results", [])) if msg.get("reactions") else 0,
-                    })
-            result["last_posts"] = posts[-5:] if posts else []
+            published_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "core", name, "published.json"
+            )
+            if os.path.exists(published_path):
+                try:
+                    with open(published_path) as f:
+                        published_ids = json.load(f)
+                    result["db"]["total"] = len(published_ids)
+                    result["db"]["published"] = len(published_ids)
+                except Exception:
+                    pass
+        else:
+            if token:
+                r = self._bot_api(token, "getChatMembersCount", {"chat_id": f"@{target}"})
+                if r.get("ok"):
+                    result["subscribers"] = r["result"]
 
-        # DB stats
-        if os.path.exists(db_path):
-            conn = sqlite3.connect(db_path)
-            result["db"]["total"] = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
-            result["db"]["published"] = conn.execute("SELECT COUNT(*) FROM posts WHERE published = 1").fetchone()[0]
-            result["db"]["skipped"] = conn.execute("SELECT COUNT(*) FROM posts WHERE published = -1").fetchone()[0]
-            try:
-                result["db"]["video"] = conn.execute("SELECT COUNT(*) FROM posts WHERE media_type = 'video'").fetchone()[0]
-            except sqlite3.OperationalError:
-                result["db"]["video"] = 0
-            conn.close()
+                r = self._bot_api(token, "getUpdates", {"timeout": 0})
+                if r.get("ok") and r.get("result"):
+                    posts = []
+                    for update in reversed(r["result"]):
+                        msg = update.get("channel_post") or update.get("message", {})
+                        if msg.get("chat", {}).get("username", "").lower() == target.lower():
+                            posts.append({
+                                "id": msg["message_id"],
+                                "date": datetime.fromtimestamp(msg["date"]).isoformat(),
+                                "views": msg.get("views", 0),
+                                "reactions": len(msg.get("reactions", {}).get("results", [])) if msg.get("reactions") else 0,
+                            })
+                    result["last_posts"] = posts[-5:] if posts else []
+
+            if os.path.exists(db_path):
+                conn = sqlite3.connect(db_path)
+                result["db"]["total"] = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+                result["db"]["published"] = conn.execute("SELECT COUNT(*) FROM posts WHERE published = 1").fetchone()[0]
+                result["db"]["skipped"] = conn.execute("SELECT COUNT(*) FROM posts WHERE published = -1").fetchone()[0]
+                try:
+                    result["db"]["video"] = conn.execute("SELECT COUNT(*) FROM posts WHERE media_type = 'video'").fetchone()[0]
+                except sqlite3.OperationalError:
+                    result["db"]["video"] = 0
+                conn.close()
 
         return result
 
