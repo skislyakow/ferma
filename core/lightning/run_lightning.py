@@ -444,6 +444,98 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
         await asyncio.sleep(300)
 
 
+def _detect_reddit_video(summary):
+    m = re.search(r'href="(https?://v\.redd\.it/[^"]+)"', summary)
+    if m:
+        return m.group(1).split("?")[0].rstrip("/")
+    return None
+
+
+def _download_reddit_video(video_url, filename):
+    import requests as _req
+    try:
+        video_id = video_url.rstrip("/").split("/")[-1]
+        manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
+        r = _req.get(manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            print(f"[REDDIT] DASH manifest {r.status_code}")
+            return None
+
+        text = r.text
+        has_audio = 'contentType="audio"' in text
+
+        video_rep = re.findall(
+            r'<Representation[^>]+bandwidth="(\d+)"[^>]+height="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+            text, re.DOTALL
+        )
+        if not video_rep:
+            print("[REDDIT] No video representations found")
+            return None
+
+        best = max(video_rep, key=lambda x: int(x[1]))
+        video_base = best[2]
+        video_height = best[1]
+
+        audio_base = None
+        if has_audio:
+            audio_section = text[text.index('contentType="audio"'):]
+            audio_rep = re.findall(
+                r'<Representation[^>]+bandwidth="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+                audio_section, re.DOTALL
+            )
+            if audio_rep:
+                best_audio = max(audio_rep, key=lambda x: int(x[0]))
+                audio_base = best_audio[1]
+
+        os.makedirs("media", exist_ok=True)
+        merged = os.path.join("media", f"{filename}.mp4")
+
+        url = f"https://v.redd.it/{video_id}/{video_base}"
+        vr = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+        vr.raise_for_status()
+        video_file = os.path.join("media", f"{filename}_video.mp4")
+        with open(video_file, "wb") as f:
+            for chunk in vr.iter_content(8192):
+                f.write(chunk)
+
+        audio_file = None
+        if audio_base:
+            url = f"https://v.redd.it/{video_id}/{audio_base}"
+            ar = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+            ar.raise_for_status()
+            audio_file = os.path.join("media", f"{filename}_audio.mp4")
+            with open(audio_file, "wb") as f:
+                for chunk in ar.iter_content(8192):
+                    f.write(chunk)
+
+        if video_file and audio_file:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", video_file, "-i", audio_file,
+                 "-c:v", "copy", "-c:a", "aac", "-strict", "experimental", merged],
+                capture_output=True, timeout=60
+            )
+            if result.returncode == 0:
+                os.remove(video_file)
+                os.remove(audio_file)
+                print(f"[REDDIT] Merged {video_height}p video + audio")
+                return merged
+            else:
+                print(f"[REDDIT] ffmpeg merge failed: {result.stderr[:200]}")
+
+        if video_file:
+            os.rename(video_file, merged)
+            if audio_file and os.path.exists(audio_file):
+                os.remove(audio_file)
+            print(f"[REDDIT] Downloaded {video_height}p video (no audio)")
+            return merged
+
+        return None
+    except Exception as e:
+        print(f"[REDDIT] Video download failed: {e}")
+        return None
+
+
 async def reddit_poller(subreddits, cfg, translator, pub, db):
     import feedparser
     import time
@@ -495,28 +587,38 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if not title:
                         continue
 
-                    # Extract image URL from summary BEFORE strip_html
+                    # Extract media from summary BEFORE strip_html
                     media_path = None
                     media_type = "photo"
                     try:
                         import re as _re, html as _html
                         _src = summary or desc or ""
-                        _m = _re.search(r'<img[^>]+src="([^"]+)"', _src)
-                        if _m:
-                            img_url = _html.unescape(_m.group(1))
-                            def _dl():
-                                import requests as _req
-                                r = _req.get(img_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-                                if r.status_code == 200:
-                                    os.makedirs("media", exist_ok=True)
-                                    ext = img_url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
-                                    fname = f"reddit_{pid}.{ext}"
-                                    fpath = os.path.join("media", fname)
-                                    with open(fpath, "wb") as f:
-                                        f.write(r.content)
-                                    return fpath
-                                return None
-                            media_path = await asyncio.to_thread(_dl)
+
+                        # Try video first (v.redd.it)
+                        video_url = _detect_reddit_video(_src)
+                        if video_url:
+                            media_path = await asyncio.to_thread(_download_reddit_video, video_url, f"reddit_{pid}")
+                            if media_path:
+                                media_type = "video"
+
+                        # Fallback to image
+                        if not media_path:
+                            _m = _re.search(r'<img[^>]+src="([^"]+)"', _src)
+                            if _m:
+                                img_url = _html.unescape(_m.group(1))
+                                def _dl():
+                                    import requests as _req
+                                    r = _req.get(img_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                                    if r.status_code == 200:
+                                        os.makedirs("media", exist_ok=True)
+                                        ext = img_url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
+                                        fname = f"reddit_{pid}.{ext}"
+                                        fpath = os.path.join("media", fname)
+                                        with open(fpath, "wb") as f:
+                                            f.write(r.content)
+                                        return fpath
+                                    return None
+                                media_path = await asyncio.to_thread(_dl)
                     except Exception as e:
                         print(f"[REDDIT] Media download failed: {e}")
                         media_path = None
