@@ -34,6 +34,20 @@ class FarmAnalytics:
         except Exception:
             return {"error": "request failed"}
 
+    def _read_vk_log(self, name: str, limit: int = 10) -> list:
+        log_path = os.path.join(self.channels_dir, name, "logs", f"{name}.log")
+        if not os.path.exists(log_path):
+            return []
+        posts = []
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if "Posted" in line or "Failed to post" in line:
+                        posts.append(line.strip())
+        except Exception:
+            pass
+        return posts[-limit:]
+
     def channel_stats(self, name: str) -> dict:
         env_path = os.path.join(self.channels_dir, name, ".env")
         db_path = os.path.join(self.channels_dir, name, "posts.db")
@@ -88,6 +102,7 @@ class FarmAnalytics:
             "reddit_subreddits": reddit_subreddits,
             "subscribers": 0,
             "last_posts": [],
+            "vk_posts": [],
             "db": {"total": 0, "published": 0, "skipped": 0, "video": 0},
             "running": False,
         }
@@ -109,6 +124,17 @@ class FarmAnalytics:
                     result["db"]["published"] = len(published_ids)
                 except Exception:
                     pass
+
+            vk_log = self._read_vk_log(name, 10)
+            result["vk_posts"] = []
+            for line in vk_log:
+                if "Posted" in line:
+                    tag = "photo" if "(photo)" in line else "video" if "(video)" in line else "text"
+                    title = line.split("...", 1)[0].split("): ", 1)[-1] if "): " in line else line
+                    result["vk_posts"].append({"type": tag, "title": title, "ok": True})
+                elif "Failed" in line:
+                    err = line.split("VK API error ", 1)[-1] if "VK API error" in line else line
+                    result["vk_posts"].append({"type": "error", "title": err, "ok": False})
         else:
             if token:
                 r = self._bot_api(token, "getChatMembersCount", {"chat_id": f"@{target}"})

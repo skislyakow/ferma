@@ -353,6 +353,13 @@ async def channel_detail(name: str, token: str = Query(None)):
     posts = ""
     for p in s.get("last_posts", []):
         posts += f"<div class='stat'><span class='label'>#{p['id']} {p['date'][:16]}</span><span class='value'>👁 {p['views']} 💬 {p['reactions']}</span></div>"
+    if not posts and s.get("vk_posts"):
+        for p in s["vk_posts"]:
+            icon = "✅" if p["ok"] else "❌"
+            tag = f"[{p['type']}]"
+            posts += f"<div class='stat'><span class='label'>{icon} {tag} {p['title'][:80]}</span></div>"
+    if not posts:
+        posts = "<div class='stat'><span class='label'>Пока нет постов</span></div>"
     running = screen_running(name)
     status_tag = "<span style='color:#3fb950'>● Работает</span>" if running else "<span style='color:#f85149'>● Остановлен</span>"
     chan_type = s.get('type', 'normal')
@@ -397,7 +404,7 @@ async def channel_detail(name: str, token: str = Query(None)):
         </div>
         <div class='card'>
             <h2>Последние посты</h2>
-            {posts if posts else "<div class='stat'><span class='label'>Пока нет постов</span></div>"}
+            {posts}
             <p style='margin-top:10px'><a href='/logs/{name}?token={token}'>Логи</a></p>
         </div>
     </div>
