@@ -56,6 +56,10 @@ class FarmAnalytics:
         rss_feeds = [x.strip() for x in cfg.get("RSS_FEEDS", "").split(",") if x.strip()]
         ru_sources_raw = self._parse_channel_list(cfg.get("RU_SOURCE_CHANNELS", ""))
         reddit_subreddits = [x.strip() for x in cfg.get("REDDIT_SUBREDDITS", "").split(",") if x.strip()]
+        if not reddit_subreddits:
+            single = cfg.get("REDDIT_SUBREDDIT", "").strip()
+            if single:
+                reddit_subreddits = [single]
 
         source_channels = []
         for ch in source_channels_raw:
@@ -89,7 +93,7 @@ class FarmAnalytics:
         }
 
         if is_vk_only:
-            r = self._vk_api(vk_token, "groups.getById", {"group_id": vk_group_id})
+            r = self._vk_api(vk_token, "groups.getById", {"group_id": vk_group_id, "fields": "members_count"})
             if "response" in r and r["response"].get("groups"):
                 result["subscribers"] = r["response"]["groups"][0].get("members_count", 0)
 
