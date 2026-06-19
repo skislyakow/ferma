@@ -174,6 +174,9 @@ async def main(env_path: str):
                 if image_urls:
                     media_path = await asyncio.to_thread(download_image, image_urls[0], f"urb_{pid}")
 
+                if not media_path:
+                    continue
+
                 try:
                     attachment = None
                     if media_path:
@@ -182,8 +185,7 @@ async def main(env_path: str):
                     published.add(pid)
                     save_published(published)
                     new_count += 1
-                    label = "photo" if media_path else "text"
-                    print(f"[Urbanistika] Posted ({label}): {title[:60]}...")
+                    print(f"[Urbanistika] Posted (photo): {title[:60]}...")
                 except Exception as e:
                     print(f"[Urbanistika] Failed to post: {e}")
 
