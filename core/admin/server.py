@@ -411,18 +411,18 @@ async def channel_detail(name: str, token: str = Query(None)):
     {sources_html}
     <div class='card'>
         <h2>Действия</h2>
-        <p style='margin-top:8px'>
+        <div style='margin-top:8px;display:flex;flex-wrap:wrap;gap:8px'>
             <a href='/channel/{name}/edit?token={token}' class='btn btn-primary btn-sm'>⚙ Настройки</a>
-            <form action='/api/channel/{name}/start?token={token}' method='post' style='display:inline'>
+            <form action='/api/channel/{name}/start?token={token}' method='post'>
                 <button type='submit' class='btn btn-primary btn-sm' {'disabled' if running else ''}>▶ Запустить</button>
             </form>
-            <form action='/api/channel/{name}/stop?token={token}' method='post' style='display:inline'>
+            <form action='/api/channel/{name}/stop?token={token}' method='post'>
                 <button type='submit' class='btn btn-warning btn-sm' {'disabled' if not running else ''}>⏹ Остановить</button>
             </form>
-            <form action='/api/channel/{name}/delete?token={token}' method='post' style='display:inline' onsubmit='return confirm("Удалить {name} и все данные?")'>
+            <form action='/api/channel/{name}/delete?token={token}' method='post' onsubmit='return confirm("Удалить {name} и все данные?")'>
                 <button type='submit' class='btn btn-danger btn-sm'>🗑 Удалить</button>
             </form>
-        </p>
+        </div>
     </div>
     <p><a href='/?token={token}'>← Назад</a></p>"""
     return head(f"{name} — Ferma", token) + body + foot()
