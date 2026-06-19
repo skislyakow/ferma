@@ -118,6 +118,8 @@ def fetch_reddit_images(post_url):
                     s = meta.get("s", {})
                     img_url = s.get("u") or s.get("gif") or ""
                     img_url = unescape(img_url)
+                    img_url = img_url.replace("preview.redd.it", "i.redd.it")
+                    img_url = re.sub(r'\?width=\d+&.*', '', img_url)
                     if img_url and img_url not in images:
                         images.append(img_url)
         else:
@@ -125,6 +127,8 @@ def fetch_reddit_images(post_url):
             if preview:
                 src = preview[0].get("source", {})
                 img_url = unescape(src.get("url", ""))
+                img_url = img_url.replace("preview.redd.it", "i.redd.it")
+                img_url = re.sub(r'\?width=\d+&.*', '', img_url)
                 if img_url:
                     images.append(img_url)
             post_url_str = post_data.get("url_overridden_by_dest") or post_data.get("url", "")
@@ -146,6 +150,9 @@ def download_image(url, filename):
         local = os.path.join(MEDIA_DIR, f"{filename}.{ext}")
         r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
+        ct = r.headers.get("content-type", "")
+        if "text/html" in ct or len(r.content) < 1000:
+            return None
         with open(local, "wb") as f:
             f.write(r.content)
         return local
