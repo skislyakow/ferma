@@ -26,6 +26,7 @@ DEFAULT_FILTERS = {
         "insiderpaper",
         "shot в max", "в мах", "shot max", "max.ru/shot",
         "подписывайтесь", "в max |", "в telegram",
+        "царьград", "не боимся говорить правду",
         "rozetked.me",
         "rozetked | подписаться",
         "пройдите наш тест",
