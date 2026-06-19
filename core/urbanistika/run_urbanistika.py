@@ -123,7 +123,10 @@ async def main(env_path: str):
     env = dotenv_values(env_path)
     vk_token = env.get("VK_TOKEN", "")
     vk_group_id = env.get("VK_GROUP_ID", "")
-    subreddit = env.get("REDDIT_SUBREDDIT", "UrbanHell")
+    subreddits_raw = env.get("REDDIT_SUBREDDITS", "") or env.get("REDDIT_SUBREDDIT", "UrbanHell")
+    subreddits = [s.strip() for s in subreddits_raw.split(",") if s.strip()]
+    if not subreddits:
+        subreddits = ["UrbanHell"]
     interval = int(env.get("REDDIT_INTERVAL", "600"))
     yc_api_key = env.get("YC_TRANSLATE_API_KEY", "")
     yc_folder_id = env.get("YC_FOLDER_ID", "")
@@ -134,15 +137,17 @@ async def main(env_path: str):
 
     vk = VKPoster(vk_token, vk_group_id)
     published = load_published()
-    channel_name = env.get("CHANNEL_NAME", subreddit)
+    sub_idx = 0
 
-    print(f"[Urbanistika] Starting. Subreddit: r/{subreddit}")
+    print(f"[Urbanistika] Starting. Subreddits: {', '.join('r/' + s for s in subreddits)}")
     print(f"[Urbanistika] VK group: {vk_group_id}")
     print(f"[Urbanistika] Already published: {len(published)} posts")
     print(f"[Urbanistika] Interval: {interval}s")
 
     while True:
         try:
+            subreddit = subreddits[sub_idx % len(subreddits)]
+            sub_idx += 1
             entries = await asyncio.to_thread(fetch_entries, subreddit)
             new_count = 0
 
