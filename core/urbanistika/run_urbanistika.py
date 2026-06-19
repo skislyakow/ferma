@@ -98,6 +98,45 @@ def extract_image_urls(entry):
     return urls
 
 
+def fetch_reddit_images(post_url):
+    import requests
+    try:
+        old_url = post_url.replace("www.reddit.com", "old.reddit.com")
+        json_url = old_url.rstrip("/") + ".json"
+        r = requests.get(json_url, timeout=15, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        post_data = data[0]["data"]["children"][0]["data"]
+        images = []
+        if post_data.get("is_gallery"):
+            media_metadata = post_data.get("media_metadata", {})
+            for item_id, meta in media_metadata.items():
+                if meta.get("status") == "valid":
+                    s = meta.get("s", {})
+                    img_url = s.get("u") or s.get("gif") or ""
+                    img_url = unescape(img_url)
+                    if img_url and img_url not in images:
+                        images.append(img_url)
+        else:
+            preview = post_data.get("preview", {}).get("images", [])
+            if preview:
+                src = preview[0].get("source", {})
+                img_url = unescape(src.get("url", ""))
+                if img_url:
+                    images.append(img_url)
+            post_url_str = post_data.get("url_overridden_by_dest") or post_data.get("url", "")
+            if post_url_str and "i.redd.it" in post_url_str:
+                base = post_url_str.split("?")[0]
+                if base not in images:
+                    images.append(base)
+        return images
+    except Exception:
+        return []
+
+
 def download_image(url, filename):
     import requests
     try:
@@ -173,6 +212,12 @@ async def main(env_path: str):
                 media_path = None
                 if image_urls:
                     media_path = await asyncio.to_thread(download_image, image_urls[0], f"urb_{pid}")
+
+                if not media_path and link:
+                    reddit_images = await asyncio.to_thread(fetch_reddit_images, link)
+                    if reddit_images:
+                        image_urls = reddit_images
+                        media_path = await asyncio.to_thread(download_image, image_urls[0], f"urb_{pid}")
 
                 if not media_path:
                     continue
