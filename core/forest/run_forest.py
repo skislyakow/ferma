@@ -84,7 +84,8 @@ def extract_image_urls(entry):
     for m in re.finditer(r'<img[^>]+src="([^"]+)"', summary):
         url = unescape(m.group(1))
         url = re.sub(r'\?width=\d+&.*', '', url)
-        url = url.replace("preview.redd.it", "i.redd.it")
+        url = url.replace("preview.redd.it", "i.redd.it").replace("external-i.redd.it", "i.redd.it")
+        url = url.replace("external-i.redd.it", "i.redd.it")
         if url not in urls:
             urls.append(url)
     if not urls:
@@ -116,7 +117,7 @@ def fetch_reddit_images(post_url):
                     s = meta.get("s", {})
                     img_url = s.get("u") or s.get("gif") or ""
                     img_url = unescape(img_url)
-                    img_url = img_url.replace("preview.redd.it", "i.redd.it")
+                    img_url = img_url.replace("preview.redd.it", "i.redd.it").replace("external-i.redd.it", "i.redd.it")
                     img_url = re.sub(r'\?width=\d+&.*', '', img_url)
                     if img_url and img_url not in images:
                         images.append(img_url)
@@ -125,7 +126,7 @@ def fetch_reddit_images(post_url):
             if preview:
                 src = preview[0].get("source", {})
                 img_url = unescape(src.get("url", ""))
-                img_url = img_url.replace("preview.redd.it", "i.redd.it")
+                img_url = img_url.replace("preview.redd.it", "i.redd.it").replace("external-i.redd.it", "i.redd.it")
                 img_url = re.sub(r'\?width=\d+&.*', '', img_url)
                 if img_url:
                     images.append(img_url)

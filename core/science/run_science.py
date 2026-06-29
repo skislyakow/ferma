@@ -56,7 +56,7 @@ def extract_image_urls(entry):
     for m in re.finditer(r'<img[^>]+src="([^"]+)"', summary):
         url = unescape(m.group(1))
         url = re.sub(r'\?width=\d+&.*', '', url)
-        url = url.replace("preview.redd.it", "i.redd.it")
+        url = url.replace("preview.redd.it", "i.redd.it").replace("external-i.redd.it", "i.redd.it")
         if url not in urls:
             urls.append(url)
 

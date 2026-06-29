@@ -610,7 +610,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         if not media_path:
                             _m = _re.search(r'<img[^>]+src="([^"]+)"', _src)
                             if _m:
-                                img_url = _html.unescape(_m.group(1))
+                                img_url = _html.unescape(_m.group(1)).replace("external-i.redd.it", "i.redd.it")
                                 def _dl():
                                     import requests as _req
                                     r = _req.get(img_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
