@@ -40,7 +40,7 @@ SESSION_FILE = "repost.session"
 VK_TRACKER_PATH = os.path.join(PROJECT_ROOT, "channels", "repost", "vk_posted.json")
 
 
-def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: str = VK_TRACKER_PATH):
+def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: str = VK_TRACKER_PATH, media_type: str = "photo"):
     if not cfg.get("VK_TOKEN") or not cfg.get("VK_GROUP_ID"):
         return
     if not media_path or media_path == REPOST_BANNER:
@@ -55,7 +55,10 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
         if post_key in posted:
             return
         vk = VKPoster(cfg["VK_TOKEN"], cfg["VK_GROUP_ID"])
-        attach = vk.upload_photo(media_path)
+        if media_type == "video":
+            attach = vk.upload_video(media_path, title=os.path.splitext(os.path.basename(media_path))[0])
+        else:
+            attach = vk.upload_photo(media_path)
         vk_text = strip_html(post_text)
         _ff = load_filters().get("footer_patterns", [])
         vk_lines = vk_text.split("\n")
@@ -269,7 +272,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         )
         print(f"[RE:POST] Published: {headline[:50]}")
         if vk_copy and os.path.exists(media_path):
-            _crosspost_to_vk(media_path, post, cfg)
+            _crosspost_to_vk(media_path, post, cfg, media_type=media_type)
         if vk_copy:
             _vk_cleanup(vk_copy)
     return success
@@ -437,7 +440,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 db.mark_published(post_id)
                 print(f"[RU] Published from {source_channel}: {text[:50]}...")
                 if vk_copy and os.path.exists(m_path):
-                    _crosspost_to_vk(m_path, post_text, cfg)
+                    _crosspost_to_vk(m_path, post_text, cfg, media_type=m_type)
                 if vk_copy:
                     _vk_cleanup(vk_copy)
 
@@ -733,7 +736,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         )
                         print(f"[REDDIT] Published: {headline[:50]}")
                         if vk_copy and os.path.exists(media_path):
-                            _crosspost_to_vk(media_path, post_text, cfg)
+                            _crosspost_to_vk(media_path, post_text, cfg, media_type=media_type)
                         if vk_copy:
                             _vk_cleanup(vk_copy)
 
