@@ -9,7 +9,7 @@ class FarmAnalytics:
     def __init__(self):
         self.channels_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "channels")
 
-    def _bot_api(self, token: str, method: str, params: dict = None):
+    def _bot_api(self, token: str, method: str, params: dict | None = None):
         url = f"https://api.telegram.org/bot{token}/{method}"
         try:
             r = requests.get(url, params=params, timeout=10)
