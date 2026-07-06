@@ -105,7 +105,6 @@ rm -f /opt/farm/filters.json  # сброс фильтров к DEFAULT
 
 ## Админка
 
-- URL: `http://<VPS_IP>:8080/?token=ferma2026`
 - Демо (только просмотр): `http://<VPS_IP>:8080/?token=demo`
 - Dashboard: общая статистика
 - Каналы: CRUD, логи, статус
