@@ -278,7 +278,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     return success
 
 
-async def auth_once(env_path: str, code: str = None):
+async def auth_once(env_path: str, code: str | None = None):
     channel_dir = os.path.dirname(os.path.abspath(env_path))
     os.chdir(channel_dir)
     cfg = load_channel_config(env_path)

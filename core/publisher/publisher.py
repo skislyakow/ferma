@@ -79,9 +79,9 @@ class Publisher:
         return text
 
     def publish(self, text: str, chat_id: str, total_published: int = 0,
-                cpa_links: list[str] = None, cpa_every: int = 3,
-                media_path: str = None, media_type: str = "photo",
-                parse_mode: str = None) -> bool:
+                cpa_links: list[str] | None = None, cpa_every: int = 3,
+                media_path: str | None = None, media_type: str = "photo",
+                parse_mode: str | None = None) -> bool:
         if not self.bot_token:
             print("[Publisher] No bot token!")
             return False

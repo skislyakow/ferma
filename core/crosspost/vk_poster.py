@@ -53,7 +53,7 @@ class VKPoster:
         photo = saved[0]
         return f"photo{photo['owner_id']}_{photo['id']}"
 
-    def post_to_wall(self, message: str, attachment: str = None):
+    def post_to_wall(self, message: str, attachment: str | None = None):
         params = {
             "owner_id": self.owner_id,
             "message": message,

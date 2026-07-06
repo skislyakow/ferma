@@ -2,7 +2,7 @@ from dotenv import dotenv_values
 import os
 
 
-def load_channel_config(env_path: str = None):
+def load_channel_config(env_path: str | None = None):
     if env_path and os.path.exists(env_path):
         env = dotenv_values(env_path)
     else:
