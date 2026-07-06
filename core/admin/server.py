@@ -36,7 +36,7 @@ SECRET_FIELDS = {
 }
 
 
-def is_demo(token: str) -> bool:
+def is_demo(token: str | None) -> bool:
     return token == DEMO_TOKEN
 
 
@@ -115,7 +115,7 @@ def foot():
     return "</body></html>"
 
 
-def check_auth(token):
+def check_auth(token: str | None):
     if token != AUTH_TOKEN and token != DEMO_TOKEN:
         raise HTTPException(401, "Invalid token")
 
@@ -817,7 +817,9 @@ REQUIRE_MEDIA={"true" if require_media == "1" else "false"}
 
 
 @app.get("/logs/{name}", response_class=HTMLResponse)
-async def view_logs(name: str, lines: int = 50, token: str | None = Query(None)):
+async def view_logs(
+    name: str, lines: int = 50, token: str | None = Query(None)
+):
     check_auth(token)
     validate_channel_name(name)
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
@@ -833,7 +835,9 @@ async def view_logs(name: str, lines: int = 50, token: str | None = Query(None))
 
 
 @app.get("/filters", response_class=HTMLResponse)
-async def filters_page(token: str | None = Query(None), msg: str | None = None):
+async def filters_page(
+    token: str | None = Query(None), msg: str | None = None
+):
     check_auth(token)
     demo = is_demo(token)
     from core.filter.manage import load_filters
@@ -898,7 +902,9 @@ async def filters_page(token: str | None = Query(None), msg: str | None = None):
 
 @app.post("/api/filters/add")
 async def api_filter_add(
-    token: str | None = Query(None), group: str = Form(...), value: str = Form(...)
+    token: str | None = Query(None),
+    group: str = Form(...),
+    value: str = Form(...),
 ):
     check_auth(token)
     if is_demo(token):
@@ -919,7 +925,9 @@ async def api_filter_add(
 
 @app.post("/api/filters/remove")
 async def api_filter_remove(
-    token: str | None = Query(None), group: str = Form(...), value: str = Form(...)
+    token: str | None = Query(None),
+    group: str = Form(...),
+    value: str = Form(...),
 ):
     check_auth(token)
     if is_demo(token):
