@@ -145,7 +145,7 @@ def get_bot_name(token: str) -> str:
         data = r.json()
         if data.get("ok"):
             return data["result"]["username"]
-    except:
+    except Exception:
         pass
     return "?"
 
