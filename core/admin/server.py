@@ -942,7 +942,7 @@ async def api_filter_remove(
     )
 
 
-def _get_default_yc_keys() -> dict:
+def _get_default_yc_keys() -> dict | None:
     for entry in os.listdir(CHANNELS_DIR):
         env_path = os.path.join(CHANNELS_DIR, entry, ".env")
         if os.path.isfile(env_path):
