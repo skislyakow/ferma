@@ -136,7 +136,7 @@ class FarmAnalytics:
             if "response" in r and r["response"].get("groups"):
                 result["subscribers"] = r["response"]["groups"][0].get(
                     "members_count", 0
-                )
+                )  # type: ignore
 
             published_path = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
