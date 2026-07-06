@@ -14,7 +14,7 @@ sys.path.insert(
     ),
 )
 
-from core.analytics import FarmAnalytics
+from core.analytics import FarmAnalytics  # noqa: E402
 
 AUTH_TOKEN = os.environ.get("ADMIN_TOKEN", "ferma2026")
 DEMO_TOKEN = "demo"
