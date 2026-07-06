@@ -263,7 +263,7 @@ class FarmAnalytics:
                 f"  БД: {s['db']['total']} всего | {s['db']['published']} опубл | {s['db']['skipped']} пропущ | {s['db']['video']} видео"
             )
             if s["last_posts"]:
-                print(f"  Последние посты:")
+                print("  Последние посты:")
                 for p in s["last_posts"][-3:]:
                     print(
                         f"    #{p['id']} | {p['date']} | views:{p['views']} | reactions:{p['reactions']}"
