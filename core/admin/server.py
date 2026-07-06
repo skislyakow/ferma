@@ -151,7 +151,7 @@ def get_bot_name(token: str) -> str:
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(token: str = Query(None), msg: str = None):
+async def dashboard(token: str | None = Query(None), msg: str | None = None):
     check_auth(token)
     demo = is_demo(token)
     analytics = FarmAnalytics()
@@ -207,7 +207,7 @@ async def dashboard(token: str = Query(None), msg: str = None):
 
 
 @app.get("/add", response_class=HTMLResponse)
-async def add_channel_form(token: str = Query(None)):
+async def add_channel_form(token: str | None = Query(None)):
     check_auth(token)
     demo = is_demo(token)
     disabled = " disabled" if demo else ""
@@ -260,7 +260,7 @@ async def add_channel_form(token: str = Query(None)):
 
 @app.post("/api/channel/create")
 async def api_create_channel(
-    token: str = Query(None),
+    token: str | None = Query(None),
     name: str = Form(...),
     channel_type: str = Form("normal"),
     bot_token: str = Form(...),
@@ -401,7 +401,7 @@ REQUIRE_MEDIA={"true" if require_media == "1" else "false"}
 
 
 @app.post("/api/channel/{name}/start")
-async def api_start_channel(name: str, token: str = Query(None)):
+async def api_start_channel(name: str, token: str | None = Query(None)):
     check_auth(token)
     if is_demo(token):
         raise HTTPException(403, "Demo mode: actions disabled")
@@ -411,7 +411,7 @@ async def api_start_channel(name: str, token: str = Query(None)):
 
 
 @app.post("/api/channel/{name}/stop")
-async def api_stop_channel(name: str, token: str = Query(None)):
+async def api_stop_channel(name: str, token: str | None = Query(None)):
     check_auth(token)
     if is_demo(token):
         raise HTTPException(403, "Demo mode: actions disabled")
@@ -423,7 +423,7 @@ async def api_stop_channel(name: str, token: str = Query(None)):
 
 
 @app.post("/api/channel/{name}/delete")
-async def api_delete_channel(name: str, token: str = Query(None)):
+async def api_delete_channel(name: str, token: str | None = Query(None)):
     check_auth(token)
     if is_demo(token):
         raise HTTPException(403, "Demo mode: actions disabled")
@@ -445,7 +445,7 @@ async def api_delete_channel(name: str, token: str = Query(None)):
 
 
 @app.get("/channel/{name}", response_class=HTMLResponse)
-async def channel_detail(name: str, token: str = Query(None)):
+async def channel_detail(name: str, token: str | None = Query(None)):
     check_auth(token)
     demo = is_demo(token)
     validate_channel_name(name)
@@ -552,7 +552,7 @@ async def channel_detail(name: str, token: str = Query(None)):
 
 
 @app.get("/channels", response_class=HTMLResponse)
-async def channels_list(token: str = Query(None)):
+async def channels_list(token: str | None = Query(None)):
     check_auth(token)
     demo = is_demo(token)
     analytics = FarmAnalytics()
@@ -592,7 +592,7 @@ async def channels_list(token: str = Query(None)):
 
 
 @app.get("/channel/{name}/edit", response_class=HTMLResponse)
-async def edit_channel_form(name: str, token: str = Query(None)):
+async def edit_channel_form(name: str, token: str | None = Query(None)):
     check_auth(token)
     demo = is_demo(token)
     validate_channel_name(name)
@@ -711,7 +711,7 @@ async def edit_channel_form(name: str, token: str = Query(None)):
 @app.post("/api/channel/{name}/update")
 async def api_update_channel(
     name: str,
-    token: str = Query(None),
+    token: str | None = Query(None),
     channel_type: str = Form("normal"),
     bot_token: str = Form(...),
     target_channel: str = Form(...),
@@ -817,7 +817,7 @@ REQUIRE_MEDIA={"true" if require_media == "1" else "false"}
 
 
 @app.get("/logs/{name}", response_class=HTMLResponse)
-async def view_logs(name: str, lines: int = 50, token: str = Query(None)):
+async def view_logs(name: str, lines: int = 50, token: str | None = Query(None)):
     check_auth(token)
     validate_channel_name(name)
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
@@ -833,7 +833,7 @@ async def view_logs(name: str, lines: int = 50, token: str = Query(None)):
 
 
 @app.get("/filters", response_class=HTMLResponse)
-async def filters_page(token: str = Query(None), msg: str = None):
+async def filters_page(token: str | None = Query(None), msg: str | None = None):
     check_auth(token)
     demo = is_demo(token)
     from core.filter.manage import load_filters
@@ -898,7 +898,7 @@ async def filters_page(token: str = Query(None), msg: str = None):
 
 @app.post("/api/filters/add")
 async def api_filter_add(
-    token: str = Query(None), group: str = Form(...), value: str = Form(...)
+    token: str | None = Query(None), group: str = Form(...), value: str = Form(...)
 ):
     check_auth(token)
     if is_demo(token):
@@ -919,7 +919,7 @@ async def api_filter_add(
 
 @app.post("/api/filters/remove")
 async def api_filter_remove(
-    token: str = Query(None), group: str = Form(...), value: str = Form(...)
+    token: str | None = Query(None), group: str = Form(...), value: str = Form(...)
 ):
     check_auth(token)
     if is_demo(token):
