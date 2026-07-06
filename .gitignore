@@ -8,8 +8,6 @@ anon.session
 # Runtime data
 *.db
 bot.log
-farm_pids.json
-bot.pid
 
 # Downloaded media (reproducible)
 channels/*/media/
@@ -35,20 +33,10 @@ Thumbs.db
 # Dev journal (local history, not for GitHub)
 ЖУРНАЛ.md
 
-# Design docs (dev notes, not part of the farm)
-telegram-automation-brainstorm.md
-telegram-farm-architecture.md
-channel-factory-framework.md
-
 # AI agent memory (project context, local only)
 AGENTS.md
 
 # Ideas and monetization log (business strategy, local only)
 IDEEV.md
-
-# Local scripts (not part of the farm)
-start_bot.ps1
-_deploy_*.py
-
 
 .venv

@@ -2,53 +2,96 @@
 
 Автоматизированная ферма Telegram-каналов для пассивного дохода.
 
-**Структура:**
+## Каналы
+
+| Канал | Тип | Доноры | Монетизация | Статус |
+|-------|-----|--------|-------------|--------|
+| @airdrop_crypto_ru | Telegram парсер | @WatcherGuru, @forklog, @CoinTelegraph | CPA | ✅ |
+| @fashionmyprofessn | Telegram парсер | 4 донора | CPA | ✅ |
+| @yourrepost | Lightning | Telethon + RSS + Reddit + RU каналы | CPA | ✅ |
+| Forest | VK-only | r/Forest (Reddit RSS) | — | ✅ |
+| Science | VK-only | r/Popular_Science_Ru (Reddit RSS) | — | ✅ |
+| Urbanistika | VK-only | r/UrbanHell (Reddit RSS) | — | ✅ |
+
+## Архитектура
 
 ```
-ferma/
-├── core/                      # Общий код
-│   ├── run_channel.py         # Запуск одного канала
-│   ├── config.py              # Загрузка .env
-│   ├── parser/web_parser.py   # Парсер t.me/s/ (текст, фото, видео)
-│   ├── translator/translator.py  # Yandex Translate
-│   ├── publisher/publisher.py # Bot API (sendMessage, sendPhoto, sendVideo)
-│   ├── filter/filters.py      # Антиспам, анти-тизеры, чистка футеров
-│   └── db/database.py         # SQLite
-│
-├── channels/                  # Каналы фермы
-│   ├── crypto/                # Крипта
-│   ├── fashion/               # Мода
-│   └── template/              # Шаблон для нового канала
-│
-├── manage.py                  # CLI (не используется — screen-ы)
-├── requirements.txt
-└── README.md
+core/
+├── run_channel.py              # Точка входа: парсер → фильтр → перевод → публикация
+├── config.py                   # Загрузка .env → dict
+├── parser/web_parser.py        # Парсинг t.me/s/ (текст, фото, видео)
+├── translator/translator.py    # Yandex Cloud Translate
+├── publisher/publisher.py      # Bot API + CPA + watermark + очистка футеров
+├── filter/
+│   ├── filters.py              # PostFilter: ad/teaser/external/duplicate detection
+│   └── manage.py               # load_filters() / save_filters() из filters.json
+├── db/database.py              # SQLite (таблица posts, дедупликация)
+├── lightning/run_lightning.py  # RE:POST: Telethon + RSS + Reddit + RU + VK crosspost
+├── crosspost/vk_poster.py      # VK API: upload_photo, upload_video, post_to_wall
+├── admin/server.py             # FastAPI веб-админка (dashboard, каналы, фильтры, логи)
+├── forest/run_forest.py        # VK-only: r/Forest → VK
+├── science/run_science.py      # VK-only: r/Popular_Science_Ru → VK
+└── urbanistika/run_urbanistika.py  # VK-only: r/UrbanHell → VK
 ```
 
-## Принцип работы
+## Типы каналов
 
-1. **Парсинг** — забор постов с t.me/s/ доноров (текст + фото + видео)
-2. **Фильтрация** — отсев рекламы, тизеров, дубликатов, чистка футеров
-3. **Перевод** — Yandex Translate (автоопределение → русский)
-4. **Публикация** — Bot API в целевой канал с CPA-ссылками
-5. **Очистка** — медиа удаляются с сервера после публикации
+### Telegram парсер (crypto, fashion)
+- Парсит `t.me/s/` доноров через `WebParser`
+- Фильтрует рекламу, тизеры, дубликаты
+- Переводит через Yandex Translate
+- Публикует через Bot API с CPA-ссылками
 
-## Деплой
+### Lightning / RE:POST (repost)
+- Telethon ( userbot) для чтения каналов
+- RSS-фиды для breaking news
+- Reddit API для видео/фото
+- RU-каналы через `t.me/s/` парсер
+- VK crosspost (фото + видео)
+- Фильтр одиночных ссылок, стоп-слова
+
+### VK-only (forest, science, urbanistika)
+- Reddit RSS → VK wall.post
+- Без Telegram-пубикации
+
+## Деплой на VPS
 
 ```bash
+# Клонирование
 git clone https://github.com/skislyakow/ferma.git /opt/farm
 cd /opt/farm
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Запуск канала
-PYTHONUNBUFFERED=1 screen -dmS fashion bash -c 'cd /opt/farm && exec venv/bin/python -u core/run_channel.py channels/fashion/.env > channels/fashion/bot.log 2>&1'
+# Запуск каналов (screen)
+screen -dmS admin bash -c 'cd /opt/farm && exec venv/bin/python -u core/admin/server.py'
+screen -dmS crypto bash -c 'cd /opt/farm && exec venv/bin/python -u core/run_channel.py channels/crypto/.env'
+screen -dmS fashion bash -c 'cd /opt/farm && exec venv/bin/python -u core/run_channel.py channels/fashion/.env'
+screen -dmS repost bash -c 'cd /opt/farm && exec venv/bin/python -u core/lightning/run_lightning.py channels/repost/.env'
+screen -dmS forest bash -c 'cd /opt/farm && exec venv/bin/python -u core/forest/run_forest.py channels/forest/.env'
+screen -dmS science bash -c 'cd /opt/farm && exec venv/bin/python -u core/science/run_science.py channels/science/.env'
+screen -dmS urbanistika bash -c 'cd /opt/farm && exec venv/bin/python -u core/urbanistika/run_urbanistika.py channels/urbanistika/.env'
 ```
 
-## Текущие каналы
+## Деплой обновлений
 
-| Канал | CPA | Интервал |
-|-------|-----|----------|
-| Крипта | + | 30 мин |
-| Мода | — | 30 мин |
+```bash
+# На VPS
+cd /opt/farm && git pull
+rm -f /opt/farm/filters.json  # сброс фильтров к DEFAULT
+# Перезапустить изменённые screen-ы
+```
+
+## Админка
+
+- URL: `http://<VPS_IP>:8080/?token=ferma2026`
+- Dashboard: общая статистика
+- Каналы: CRUD, логи, статус
+- Фильтры: редактирование footer_patterns, ad_keywords, external_source_patterns, teaser_patterns
+
+## Окружение
+
+- Python 3.10+ (локально), 3.12 (VPS Ubuntu 24.04)
+- Зависимости: `pip install -r requirements.txt`
+- Конфиги: `channels/*/.env` (gitignored)
