@@ -134,7 +134,7 @@ class FarmAnalytics:
                 {"group_id": vk_group_id, "fields": "members_count"},
             )
             if "response" in r and r["response"].get("groups"):
-                result["subscribers"] = r["response"]["groups"][0].get(
+                result["subscribers"] = r["response"]["groups"][0].get(  # type: ignore[index]
                     "members_count", 0
                 )  # type: ignore
 
