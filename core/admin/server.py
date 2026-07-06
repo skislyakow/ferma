@@ -12,9 +12,32 @@ import uvicorn
 from core.analytics import FarmAnalytics
 
 AUTH_TOKEN = os.environ.get("ADMIN_TOKEN", "ferma2026")
+DEMO_TOKEN = "demo"
 FARM_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CHANNELS_DIR = os.path.join(FARM_DIR, "channels")
 PYTHON = os.path.join(FARM_DIR, "venv", "bin", "python")
+
+SECRET_FIELDS = {
+    "BOT_TOKEN": lambda v: v[:4] + "***" if len(v) > 4 else "***",
+    "TELEGRAM_API_ID": lambda v: "***",
+    "TELEGRAM_API_HASH": lambda v: "***",
+    "TELEGRAM_PHONE": lambda v: v[:2] + "****" if len(v) > 2 else "****",
+    "YC_TRANSLATE_API_KEY": lambda v: "***",
+    "YC_FOLDER_ID": lambda v: "***",
+    "VK_TOKEN": lambda v: "***",
+    "CPA_LINKS": lambda v: "***",
+}
+
+
+def is_demo(token: str) -> bool:
+    return token == DEMO_TOKEN
+
+
+def mask_value(key: str, value: str, demo: bool) -> str:
+    if not demo or not value:
+        return value
+    fn = SECRET_FIELDS.get(key)
+    return fn(value) if fn else value
 
 app = FastAPI(title="Ferma Admin")
 
@@ -56,9 +79,15 @@ label { display:block; margin-bottom:4px; color:#8b949e; font-size:13px; text-tr
 .msg-success { background:#1b3d1f; border:1px solid #238636; color:#7ee787; }
 .msg-error { background:#3d1b1b; border:1px solid #da3633; color:#f85149; }
 form { max-width:600px; }
+.demo-banner { background:#1c3a5e; border:1px solid #388bfd; border-radius:8px; padding:12px 16px; margin-bottom:20px; color:#79c0ff; font-size:14px; }
+.demo-banner b { color:#f0f6fc; }
+.demo-disabled { opacity:0.4; pointer-events:none; }
 """
 
-def head(title, token):
+def head(title, token, demo=False):
+    demo_html = ""
+    if demo:
+        demo_html = "<div class='demo-banner'><b>Демо-режим</b> — просмотр интерфейса. Все действия и кнопки недоступны. Секретные данные скрыты.</div>"
     return f"""<!DOCTYPE html><html lang='ru'><head><meta charset='utf-8'><title>{title}</title><style>{CSS}</style>
 <script>
 function toggleType() {{
@@ -69,13 +98,14 @@ function toggleType() {{
 }}
 </script>
 </head><body>
-<div class='nav'><a href='/?token={token}'>Панель</a><a href='/channels?token={token}'>Каналы</a><a href='/filters?token={token}'>Фильтры</a><a href='/add?token={token}'>+ Добавить канал</a></div>"""
+<div class='nav'><a href='/?token={token}'>Панель</a><a href='/channels?token={token}'>Каналы</a><a href='/filters?token={token}'>Фильтры</a><a href='/add?token={token}'>+ Добавить канал</a></div>
+{demo_html}"""
 
 def foot():
     return "</body></html>"
 
 def check_auth(token):
-    if token != AUTH_TOKEN:
+    if token != AUTH_TOKEN and token != DEMO_TOKEN:
         raise HTTPException(401, "Invalid token")
 
 CHANNEL_NAME_RE = re.compile(r'^[a-z0-9][a-z0-9_\-]*$')
@@ -106,6 +136,7 @@ def get_bot_name(token: str) -> str:
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(token: str = Query(None), msg: str = None):
     check_auth(token)
+    demo = is_demo(token)
     analytics = FarmAnalytics()
     statuses = analytics.farm_status()
     msg_html = ""
@@ -125,6 +156,7 @@ async def dashboard(token: str = Query(None), msg: str = None):
         if chan_type == 'lightning':
             rss = s.get('rss_feeds', [])
             extra = f"<div class='stat'><span class='label'>RSS фидов</span><span class='value'>{len(rss)}</span></div>"
+        action_cls = " class='demo-disabled'" if demo else ""
         cards += f"""
         <div class='card'>
             <h2 style='margin-top:0'><a href='/channel/{s['name']}?token={token}'>{s['name']}</a> <span style='float:right;font-size:13px;color:#8b949e'>{type_tag}</span></h2>
@@ -136,63 +168,65 @@ async def dashboard(token: str = Query(None), msg: str = None):
             <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s['db']['published']}</span></div>
             <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s['db']['skipped']}</span></div>
             <div class='stat'><span class='label'>Видео</span><span class='value'>{s['db']['video']}</span></div>
-            <p style='margin-top:10px'>
+            <p style='margin-top:10px'{action_cls}>
                 <a href='/logs/{s['name']}?token={token}'>[логи]</a>
                 <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Управление</a>
             </p>
         </div>"""
     body = f"<h1>Панель управления</h1>{msg_html}<div class='grid'>{cards}</div>"
-    return head("Панель — Ferma", token) + body + foot()
+    return head("Панель — Ferma", token, demo=demo) + body + foot()
 
 
 @app.get("/add", response_class=HTMLResponse)
 async def add_channel_form(token: str = Query(None)):
     check_auth(token)
+    demo = is_demo(token)
+    disabled = " disabled" if demo else ""
     body = f"""
     <h1>Добавить канал</h1>
-    <form action='/api/channel/create?token={token}' method='post'>
-        <div class='form-group'><label>Название (папка)</label><input type='text' name='name' placeholder='например: tech' required></div>
+    <form action='/api/channel/create?token={token}' method='post'{' class="demo-disabled"' if demo else ''}>
+        <div class='form-group'><label>Название (папка)</label><input type='text' name='name' placeholder='например: tech' required{disabled}></div>
         <div class='form-group'><label>Тип канала</label>
-            <select name='channel_type' id='channel_type' onchange='toggleType()' required>
+            <select name='channel_type' id='channel_type' onchange='toggleType()' required{disabled}>
                 <option value='normal'>Normal (Telethon + парсер)</option>
                 <option value='lightning'>Lightning / RE:POST (Telethon polling + RSS)</option>
             </select>
         </div>
         <div id='normal_fields'>
-            <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required></div>
-            <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@moy_kal' required></div>
-            <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@donor1,@donor2' required></div>
+            <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required{disabled}></div>
+            <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@moy_kal' required{disabled}></div>
+            <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@donor1,@donor2' required{disabled}></div>
             <div class='form-row'>
-                <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='0.5' step='0.1'></div>
-                <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='2'></div>
+                <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='0.5' step='0.1'{disabled}></div>
+                <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='2'{disabled}></div>
             </div>
-            <div class='form-group'><label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px'> Только посты с медиа (фото/видео)</label></div>
+            <div class='form-group'><label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px'{disabled}> Только посты с медиа (фото/видео)</label></div>
         </div>
         <div id='lightning_fields' style='display:none'>
-            <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required></div>
-            <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@yourrepost' required></div>
-            <div class='form-group'><label>Telegram доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@WatcherGuru,@BNONews' required></div>
+            <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' placeholder='123456:ABC-DEF1234' required{disabled}></div>
+            <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' placeholder='@yourrepost' required{disabled}></div>
+            <div class='form-group'><label>Telegram доноры (через запятую)</label><input type='text' name='source_channels' placeholder='@WatcherGuru,@BNONews' required{disabled}></div>
             <div class='form-row'>
-                <div class='form-group'><label>TELEGRAM_API_ID</label><input type='text' name='api_id' placeholder='12345' required></div>
-                <div class='form-group'><label>TELEGRAM_API_HASH</label><input type='text' name='api_hash' placeholder='abc123...' required></div>
+                <div class='form-group'><label>TELEGRAM_API_ID</label><input type='text' name='api_id' placeholder='12345' required{disabled}></div>
+                <div class='form-group'><label>TELEGRAM_API_HASH</label><input type='text' name='api_hash' placeholder='abc123...' required{disabled}></div>
             </div>
-            <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' placeholder='+79001234567' required></div>
-            <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' placeholder='https://feeds.bbci.co.uk/news/rss.xml,...'></div>
-            <div class='form-group'><label>RU доноры (через запятую)</label><input type='text' name='ru_source_channels' placeholder='@tass_agency,@rian_ru,...'></div>
-            <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' placeholder='worldnews,news,...'></div>
+            <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' placeholder='+79001234567' required{disabled}></div>
+            <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' placeholder='https://feeds.bbci.co.uk/news/rss.xml,...'{disabled}></div>
+            <div class='form-group'><label>RU доноры (через запятую)</label><input type='text' name='ru_source_channels' placeholder='@tass_agency,@rian_ru,...'{disabled}></div>
+            <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' placeholder='worldnews,news,...'{disabled}></div>
         </div>
         <div class='form-row'>
-            <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='en'></div>
-            <div class='form-group'><label>Язык перевода</label><input type='text' name='target_lang' value='ru'></div>
+            <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='en'{disabled}></div>
+            <div class='form-group'><label>Язык перевода</label><input type='text' name='target_lang' value='ru'{disabled}></div>
         </div>
-        <div class='form-group'><label>CPA-ссылки (опционально, через запятую)</label><input type='text' name='cpa_links' placeholder='https://...'></div>
+        <div class='form-group'><label>CPA-ссылки (опционально, через запятую)</label><input type='text' name='cpa_links' placeholder='https://...'{disabled}></div>
         <div class='form-row'>
-            <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='3'></div>
-            <div class='form-group'><label>Запустить после создания</label><input type='checkbox' name='start_now' value='1' style='width:auto;margin-top:8px' checked></div>
+            <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='3'{disabled}></div>
+            <div class='form-group'><label>Запустить после создания</label><input type='checkbox' name='start_now' value='1' style='width:auto;margin-top:8px' checked{disabled}></div>
         </div>
-        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Создать</button> <a href='/?token={token}' class='btn btn-warning'>Отмена</a></p>
+        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'{disabled}>Создать</button> <a href='/?token={token}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
-    return head("Добавить канал — Ferma", token) + body + foot()
+    return head("Добавить канал — Ferma", token, demo=demo) + body + foot()
 
 
 @app.post("/api/channel/create")
@@ -219,6 +253,8 @@ async def api_create_channel(
     reddit_subreddits: str = Form(""),
 ):
     check_auth(token)
+    if is_demo(token):
+        raise HTTPException(403, "Demo mode: actions disabled")
 
     name = name.strip().lower().replace(" ", "_")
     if not CHANNEL_NAME_RE.match(name):
@@ -316,6 +352,8 @@ REQUIRE_MEDIA={'true' if require_media == '1' else 'false'}
 @app.post("/api/channel/{name}/start")
 async def api_start_channel(name: str, token: str = Query(None)):
     check_auth(token)
+    if is_demo(token):
+        raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     _start_screen(name)
     return RedirectResponse(f"/?token={token}&msg={name}+запущен", 302)
@@ -324,6 +362,8 @@ async def api_start_channel(name: str, token: str = Query(None)):
 @app.post("/api/channel/{name}/stop")
 async def api_stop_channel(name: str, token: str = Query(None)):
     check_auth(token)
+    if is_demo(token):
+        raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     subprocess.run(["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5)
     return RedirectResponse(f"/?token={token}&msg={name}+остановлен", 302)
@@ -332,6 +372,8 @@ async def api_stop_channel(name: str, token: str = Query(None)):
 @app.post("/api/channel/{name}/delete")
 async def api_delete_channel(name: str, token: str = Query(None)):
     check_auth(token)
+    if is_demo(token):
+        raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     ch_dir = os.path.join(CHANNELS_DIR, name)
     if not os.path.exists(ch_dir):
@@ -345,6 +387,7 @@ async def api_delete_channel(name: str, token: str = Query(None)):
 @app.get("/channel/{name}", response_class=HTMLResponse)
 async def channel_detail(name: str, token: str = Query(None)):
     check_auth(token)
+    demo = is_demo(token)
     validate_channel_name(name)
     analytics = FarmAnalytics()
     s = analytics.channel_stats(name)
@@ -389,6 +432,7 @@ async def channel_detail(name: str, token: str = Query(None)):
     if reddit:
         reddit_rows = "".join(f"<tr><td><a href='https://reddit.com/r/{r}' target='_blank'>r/{r}</a></td></tr>" for r in reddit)
         sources_html += f"<div class='card'><h2>Reddit ({len(reddit)})</h2><table><tr><th>Сабреддит</th></tr>{reddit_rows}</table></div>"
+    action_cls = " class='demo-disabled'" if demo else ""
     body = f"""
     <h1>{s['name']} <span style='font-size:14px;color:#8b949e'>@{s['target']} {type_tag}</span></h1>
     <div class='grid'>
@@ -411,26 +455,27 @@ async def channel_detail(name: str, token: str = Query(None)):
     {sources_html}
     <div class='card'>
         <h2>Действия</h2>
-        <div style='margin-top:8px;display:flex;flex-wrap:wrap;gap:8px'>
+        <div style='margin-top:8px;display:flex;flex-wrap:wrap;gap:8px'{' class="demo-disabled"' if demo else ''}>
             <a href='/channel/{name}/edit?token={token}' class='btn btn-primary btn-sm'>⚙ Настройки</a>
             <form action='/api/channel/{name}/start?token={token}' method='post'>
-                <button type='submit' class='btn btn-primary btn-sm' {'disabled' if running else ''}>▶ Запустить</button>
+                <button type='submit' class='btn btn-primary btn-sm' {'disabled' if running or demo else ''}>▶ Запустить</button>
             </form>
             <form action='/api/channel/{name}/stop?token={token}' method='post'>
-                <button type='submit' class='btn btn-warning btn-sm' {'disabled' if not running else ''}>⏹ Остановить</button>
+                <button type='submit' class='btn btn-warning btn-sm' {'disabled' if not running or demo else ''}>⏹ Остановить</button>
             </form>
             <form action='/api/channel/{name}/delete?token={token}' method='post' onsubmit='return confirm("Удалить {name} и все данные?")'>
-                <button type='submit' class='btn btn-danger btn-sm'>🗑 Удалить</button>
+                <button type='submit' class='btn btn-danger btn-sm'{'disabled' if demo else ''}>🗑 Удалить</button>
             </form>
         </div>
     </div>
     <p><a href='/?token={token}'>← Назад</a></p>"""
-    return head(f"{name} — Ferma", token) + body + foot()
+    return head(f"{name} — Ferma", token, demo=demo) + body + foot()
 
 
 @app.get("/channels", response_class=HTMLResponse)
 async def channels_list(token: str = Query(None)):
     check_auth(token)
+    demo = is_demo(token)
     analytics = FarmAnalytics()
     statuses = analytics.farm_status()
     rows = ""
@@ -440,6 +485,7 @@ async def channels_list(token: str = Query(None)):
             continue
         running = screen_running(s["name"])
         status_tag = "<span style='color:#3fb950'>●</span>" if running else "<span style='color:#f85149'>●</span>"
+        action_cls = " class='demo-disabled'" if demo else ""
         rows += f"""<tr>
             <td><a href='/channel/{s['name']}?token={token}'>{s['name']}</a></td>
             <td>@{s['target']}</td>
@@ -447,7 +493,7 @@ async def channels_list(token: str = Query(None)):
             <td>{s['subscribers']}</td>
             <td>{s['donors']}</td>
             <td>{s['db']['total']}/{s['db']['published']}/{s['db']['skipped']}</td>
-            <td>
+            <td{action_cls}>
                 <a href='/channel/{s['name']}?token={token}' class='btn btn-primary btn-sm'>Управление</a>
                 <a href='/channel/{s['name']}/edit?token={token}' class='btn btn-warning btn-sm'>Настройки</a>
             </td>
@@ -459,12 +505,13 @@ async def channels_list(token: str = Query(None)):
         {rows if rows else "<tr><td colspan='7' style='text-align:center;color:#8b949e'>Нет каналов</td></tr>"}
     </table>
     <p><a href='/?token={token}'>← Назад</a></p>"""
-    return head("Каналы — Ferma", token) + body + foot()
+    return head("Каналы — Ferma", token, demo=demo) + body + foot()
 
 
 @app.get("/channel/{name}/edit", response_class=HTMLResponse)
 async def edit_channel_form(name: str, token: str = Query(None)):
     check_auth(token)
+    demo = is_demo(token)
     validate_channel_name(name)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
@@ -472,53 +519,57 @@ async def edit_channel_form(name: str, token: str = Query(None)):
     from dotenv import dotenv_values
     cfg = dotenv_values(env_path)
     def v(key, default=""):
-        return cfg.get(key, default)
+        return mask_value(key, cfg.get(key, default), demo)
     is_lightning = cfg.get("CHANNEL_TYPE", "") == "lightning"
     rm_checked = 'checked' if cfg.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes") else ''
+    disabled = " disabled" if demo else ""
     body = f"""
     <h1>Настройки: {name} <span style='font-size:14px;color:#8b949e'>{'⚡️ Lightning' if is_lightning else '📰 Normal'}</span></h1>
-    <form action='/api/channel/{name}/update?token={token}' method='post'>
+    <form action='/api/channel/{name}/update?token={token}' method='post'{' class="demo-disabled"' if demo else ''}>
         <input type='hidden' name='channel_type' value='{'lightning' if is_lightning else 'normal'}'>
-        <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' value='{v("BOT_TOKEN")}' required></div>
-        <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' value='{v("TARGET_CHANNEL")}' required></div>
-        <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' value='{v("SOURCE_CHANNELS")}' required></div>
+        <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' value='{v("BOT_TOKEN")}' required{disabled}></div>
+        <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' value='{v("TARGET_CHANNEL")}' required{disabled}></div>
+        <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' value='{v("SOURCE_CHANNELS")}' required{disabled}></div>
         {'' if not is_lightning else '''
         <div class='form-row'>
-            <div class='form-group'><label>TELEGRAM_API_ID</label><input type='text' name='api_id' value='{}'></div>
-            <div class='form-group'><label>TELEGRAM_API_HASH</label><input type='text' name='api_hash' value='{}'></div>
+            <div class='form-group'><label>TELEGRAM_API_ID</label><input type='text' name='api_id' value='{}'{}></div>
+            <div class='form-group'><label>TELEGRAM_API_HASH</label><input type='text' name='api_hash' value='{}'{}></div>
         </div>
-        <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' value='{}'></div>
-        <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' value='{}'></div>
-        <div class='form-group'><label>RU доноры (через запятую)</label><input type='text' name='ru_source_channels' value='{}'></div>
-        <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' value='{}'></div>
+        <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' value='{}'{}></div>
+        <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' value='{}'{}></div>
+        <div class='form-group'><label>RU доноры (через запятую)</label><input type='text' name='ru_source_channels' value='{}'{}></div>
+        <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' value='{}'{}></div>
         '''.format(
-            v("TELEGRAM_API_ID"), v("TELEGRAM_API_HASH"),
-            v("TELEGRAM_PHONE"), v("RSS_FEEDS"),
-            v("RU_SOURCE_CHANNELS"), v("REDDIT_SUBREDDITS")
+            v("TELEGRAM_API_ID"), disabled,
+            v("TELEGRAM_API_HASH"), disabled,
+            v("TELEGRAM_PHONE"), disabled,
+            v("RSS_FEEDS"), disabled,
+            v("RU_SOURCE_CHANNELS"), disabled,
+            v("REDDIT_SUBREDDITS"), disabled
         )}
         <div class='form-row'>
-            <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='{v("SOURCE_LANG", "en")}'></div>
-            <div class='form-group'><label>Язык перевода</label><input type='text' name='target_lang' value='{v("TARGET_LANG", "ru")}'></div>
+            <div class='form-group'><label>Язык источника</label><input type='text' name='source_lang' value='{v("SOURCE_LANG", "en")}'{disabled}></div>
+            <div class='form-group'><label>Язык перевода</label><input type='text' name='target_lang' value='{v("TARGET_LANG", "ru")}'{disabled}></div>
         </div>
         <div class='form-row'>
-            <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='{v("PUBLISH_INTERVAL_HOURS", "0.5")}' step='0.1'></div>
-            <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='{v("POSTS_PER_CYCLE", "2")}'></div>
+            <div class='form-group'><label>Интервал (часы)</label><input type='number' name='publish_interval_hours' value='{v("PUBLISH_INTERVAL_HOURS", "0.5")}' step='0.1'{disabled}></div>
+            <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='{v("POSTS_PER_CYCLE", "2")}'{disabled}></div>
         </div>
         <div class='form-group'>
-            <label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px' {rm_checked}> Только с медиа</label>
+            <label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px' {rm_checked}{disabled}> Только с медиа</label>
         </div>
-        <div class='form-group'><label>CPA-ссылки (через запятую)</label><input type='text' name='cpa_links' value='{v("CPA_LINKS")}' placeholder='https://...'></div>
+        <div class='form-group'><label>CPA-ссылки (через запятую)</label><input type='text' name='cpa_links' value='{v("CPA_LINKS")}' placeholder='https://...'{disabled}></div>
         <div class='form-row'>
-            <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='{v("CPA_INSERT_EVERY", "3")}'></div>
-            <div class='form-group'><label>YC ключ перевода</label><input type='text' name='yc_api_key' value='{v("YC_TRANSLATE_API_KEY")}'></div>
+            <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='{v("CPA_INSERT_EVERY", "3")}'{disabled}></div>
+            <div class='form-group'><label>YC ключ перевода</label><input type='text' name='yc_api_key' value='{v("YC_TRANSLATE_API_KEY")}'{disabled}></div>
         </div>
         <div class='form-row'>
-            <div class='form-group'><label>YC Folder ID</label><input type='text' name='yc_folder_id' value='{v("YC_FOLDER_ID")}'></div>
+            <div class='form-group'><label>YC Folder ID</label><input type='text' name='yc_folder_id' value='{v("YC_FOLDER_ID")}'{disabled}></div>
         </div>
-        <div class='form-group'><label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked> Перезапустить после сохранения</label></div>
-        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Сохранить</button> <a href='/channel/{name}?token={token}' class='btn btn-warning'>Отмена</a></p>
+        <div class='form-group'><label><input type='checkbox' name='restart' value='1' style='width:auto;margin-top:8px' checked{disabled}> Перезапустить после сохранения</label></div>
+        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'{disabled}>Сохранить</button> <a href='/channel/{name}?token={token}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
-    return head(f"Настройки {name} — Ferma", token) + body + foot()
+    return head(f"Настройки {name} — Ferma", token, demo=demo) + body + foot()
 
 
 @app.post("/api/channel/{name}/update")
@@ -546,6 +597,8 @@ async def api_update_channel(
     reddit_subreddits: str = Form(""),
 ):
     check_auth(token)
+    if is_demo(token):
+        raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
@@ -633,6 +686,7 @@ async def view_logs(name: str, lines: int = 50, token: str = Query(None)):
 @app.get("/filters", response_class=HTMLResponse)
 async def filters_page(token: str = Query(None), msg: str = None):
     check_auth(token)
+    demo = is_demo(token)
     from core.filter.manage import load_filters
     f = load_filters()
     msg_html = ""
@@ -648,31 +702,43 @@ async def filters_page(token: str = Query(None), msg: str = None):
     sections = ""
     for key, label in groups.items():
         items = f.get(key, [])
-        rows = "".join(
-            f"<tr><td>{item}</td><td>"
-            f"<form action='/api/filters/remove?token={token}' method='post' style='display:inline'>"
-            f"<input type='hidden' name='group' value='{key}'>"
-            f"<input type='hidden' name='value' value='{item}'>"
-            f"<button type='submit' class='btn btn-danger btn-sm'>X</button></form></td></tr>"
-            for item in items
-        ) if items else "<tr><td colspan='2' style='color:#8b949e'>(пусто)</td></tr>"
-        sections += f"""
-        <div class='card'>
-            <h2>{label}</h2>
-            <table><tr><th>Фраза</th><th style='width:50px'></th></tr>{rows}</table>
+        if demo:
+            rows = "".join(
+                f"<tr><td>{item}</td><td><button class='btn btn-danger btn-sm' disabled>X</button></td></tr>"
+                for item in items
+            ) if items else "<tr><td colspan='2' style='color:#8b949e'>(пусто)</td></tr>"
+        else:
+            rows = "".join(
+                f"<tr><td>{item}</td><td>"
+                f"<form action='/api/filters/remove?token={token}' method='post' style='display:inline'>"
+                f"<input type='hidden' name='group' value='{key}'>"
+                f"<input type='hidden' name='value' value='{item}'>"
+                f"<button type='submit' class='btn btn-danger btn-sm'>X</button></form></td></tr>"
+                for item in items
+            ) if items else "<tr><td colspan='2' style='color:#8b949e'>(пусто)</td></tr>"
+        add_form = ""
+        if not demo:
+            add_form = f"""
             <form action='/api/filters/add?token={token}' method='post' style='margin-top:8px;display:flex;gap:8px'>
                 <input type='hidden' name='group' value='{key}'>
                 <input type='text' name='value' placeholder='новая фраза...' style='margin-bottom:0;flex:1' required>
                 <button type='submit' class='btn btn-primary btn-sm'>Добавить</button>
-            </form>
+            </form>"""
+        sections += f"""
+        <div class='card'>
+            <h2>{label}</h2>
+            <table><tr><th>Фраза</th><th style='width:50px'></th></tr>{rows}</table>
+            {add_form}
         </div>"""
     body = f"<h1>Управление фильтрами</h1>{msg_html}{sections}<p><a href='/?token={token}'>← Назад</a></p>"
-    return head("Фильтры — Ferma", token) + body + foot()
+    return head("Фильтры — Ferma", token, demo=demo) + body + foot()
 
 
 @app.post("/api/filters/add")
 async def api_filter_add(token: str = Query(None), group: str = Form(...), value: str = Form(...)):
     check_auth(token)
+    if is_demo(token):
+        raise HTTPException(403, "Demo mode: actions disabled")
     from core.filter.manage import load_filters, save_filters
     f = load_filters()
     if group not in f:
@@ -687,6 +753,8 @@ async def api_filter_add(token: str = Query(None), group: str = Form(...), value
 @app.post("/api/filters/remove")
 async def api_filter_remove(token: str = Query(None), group: str = Form(...), value: str = Form(...)):
     check_auth(token)
+    if is_demo(token):
+        raise HTTPException(403, "Demo mode: actions disabled")
     from core.filter.manage import load_filters, save_filters
     f = load_filters()
     if group in f:

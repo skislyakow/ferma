@@ -2,6 +2,26 @@
 
 Автоматизированная ферма Telegram-каналов для пассивного дохода.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/skislyakow/ferma/blob/master/LICENSE)
+![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115.6-009688?logo=fastapi)
+![Telethon](https://img.shields.io/badge/Telethon-1.36.0-2CA5E0?logo=telegram)
+![uvicorn](https://img.shields.io/badge/uvicorn-0.34.0-009688)
+![feedparser](https://img.shields.io/badge/feedparser-6.0.12-orange)
+![Pillow](https://img.shields.io/badge/Pillow-12.2.0-blue)
+![requests](https://img.shields.io/badge/requests-2.32.3-green)
+![GitHub stars](https://img.shields.io/github/stars/skislyakow/ferma?style=social)
+![GitHub forks](https://img.shields.io/github/forks/skislyakow/ferma?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/skislyakow/ferma?style=social)
+![Last commit](https://img.shields.io/github/last-commit/skislyakow/ferma)
+![Commit activity](https://img.shields.io/github/commit-activity/y/skislyakow/ferma)
+![Repo size](https://img.shields.io/github/repo-size/skislyakow/ferma)
+![Code size](https://img.shields.io/github/languages/code-size/skislyakow/ferma)
+![Platform](https://img.shields.io/badge/Platform-Linux-green)
+![Deployment](https://img.shields.io/badge/Deployment-VPS-orange)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+![mypy](https://img.shields.io/badge/mypy-enabled-blue)
+
 ## Каналы
 
 | Канал | Тип | Доноры | Монетизация | Статус |
@@ -86,6 +106,7 @@ rm -f /opt/farm/filters.json  # сброс фильтров к DEFAULT
 ## Админка
 
 - URL: `http://<VPS_IP>:8080/?token=ferma2026`
+- Демо (только просмотр): `http://<VPS_IP>:8080/?token=demo`
 - Dashboard: общая статистика
 - Каналы: CRUD, логи, статус
 - Фильтры: редактирование footer_patterns, ad_keywords, external_source_patterns, teaser_patterns
