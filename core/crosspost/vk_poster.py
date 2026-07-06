@@ -35,7 +35,7 @@ class VKPoster:
             raise FileNotFoundError(f"Photo not found: {file_path}")
 
         upload_data = self._get_upload_url()
-        upload_url = upload_data["upload_url"]
+        upload_url = upload_data["upload_url"]  # type: ignore[index]
 
         with open(file_path, "rb") as f:
             resp = requests.post(upload_url, files={"photo": f}, timeout=60)
@@ -72,7 +72,7 @@ class VKPoster:
             "name": title or "Video",
             "wallpost": 0,
         })
-        upload_url = save_data["upload_url"]
+        upload_url = save_data["upload_url"]  # type: ignore[index]
 
         with open(file_path, "rb") as f:
             resp = requests.post(upload_url, files={"video_file": f}, timeout=120)
