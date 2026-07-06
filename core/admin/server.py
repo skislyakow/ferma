@@ -511,7 +511,6 @@ async def channel_detail(name: str, token: str | None = Query(None)):
             for r in reddit
         )
         sources_html += f"<div class='card'><h2>Reddit ({len(reddit)})</h2><table><tr><th>Сабреддит</th></tr>{reddit_rows}</table></div>"
-    action_cls = " class='demo-disabled'" if demo else ""
     body = f"""
     <h1>{s["name"]} <span style='font-size:14px;color:#8b949e'>@{s["target"]} {type_tag}</span></h1>
     <div class='grid'>

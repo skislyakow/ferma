@@ -1,6 +1,5 @@
 import os
 import requests
-import time
 
 VK_API = "https://api.vk.com/method"
 

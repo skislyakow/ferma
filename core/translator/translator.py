@@ -1,7 +1,5 @@
 import requests
 
-from core.config import load_channel_config
-
 
 class Translator:
     def __init__(self, cfg: dict):

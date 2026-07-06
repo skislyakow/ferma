@@ -39,7 +39,3 @@ class LightningCollector:
                     print(f"[Lightning] Poll error {ch}: {e}")
 
             await asyncio.sleep(self.poll_interval)
-
-    async def stop(self):
-        self._running = False
-        await self.client.disconnect()

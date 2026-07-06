@@ -1,9 +1,6 @@
 from telethon.sync import TelegramClient
-from telethon.tl.functions.messages import GetHistoryRequest
-from telethon.tl.types import InputPeerChannel
 import sqlite3
 import os
-import re
 from dotenv import load_dotenv
 
 load_dotenv()
