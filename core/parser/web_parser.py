@@ -82,7 +82,7 @@ class WebParser:
         if len(raw_messages) < 2:
             raw_messages = html.split('class="message')
 
-        found = []
+        found: list[dict] = []
         seen_ids = set()
 
         for block in raw_messages[1:]:

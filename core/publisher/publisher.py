@@ -53,7 +53,7 @@ class Publisher:
         _f = load_filters()
         footer_patterns = _f.get("footer_patterns", [])
         lines = text.split("\n")
-        clean = []
+        clean: list[str] = []
         for i, line in enumerate(lines):
             stripped = line.strip().lower()
             skip = False

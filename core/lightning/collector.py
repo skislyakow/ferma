@@ -7,8 +7,8 @@ class LightningCollector:
         self.client = TelegramClient(session_path, api_id, api_hash)
         self.phone = phone
         self._handler = None
-        self._channels = []
-        self._last_msg_ids = {}
+        self._channels: list[str] = []
+        self._last_msg_ids: dict[str, int] = {}
         self.poll_interval = poll_interval
         self._running = False
 

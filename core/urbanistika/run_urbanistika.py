@@ -79,7 +79,7 @@ def fetch_entries(subreddit):
 
 
 def extract_image_urls(entry):
-    urls = []
+    urls: list[str] = []
     summary = (entry.get("summary") or entry.get("description") or "")
     for m in re.finditer(r'<img[^>]+src="([^"]+)"', summary):
         url = unescape(m.group(1))
@@ -110,7 +110,7 @@ def fetch_reddit_images(post_url):
             return []
         data = r.json()
         post_data = data[0]["data"]["children"][0]["data"]
-        images = []
+        images: list[str] = []
         if post_data.get("is_gallery"):
             media_metadata = post_data.get("media_metadata", {})
             for item_id, meta in media_metadata.items():

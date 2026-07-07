@@ -764,7 +764,7 @@ async def main(env_path: str):
     pub = Publisher()
     pub.set_token(cfg["BOT_TOKEN"])
 
-    tasks = []
+    tasks: list[asyncio.Task[None]] = []
 
     # Start Telegram collector
     collector = LightningCollector(

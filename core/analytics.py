@@ -93,7 +93,7 @@ class FarmAnalytics:
             if single:
                 reddit_subreddits = [single]
 
-        source_channels = []
+        source_channels: list[dict[str, str]] = []
         for ch in source_channels_raw:
             if token:
                 name_resolved = self._resolve_channel_name(token, ch)
@@ -101,7 +101,7 @@ class FarmAnalytics:
                 name_resolved = ch
             source_channels.append({"username": ch, "title": name_resolved})
 
-        ru_source_channels = []
+        ru_source_channels: list[dict[str, str]] = []
         for ch in ru_sources_raw:
             if token:
                 name_resolved = self._resolve_channel_name(token, ch)
@@ -191,7 +191,7 @@ class FarmAnalytics:
 
                 r = self._bot_api(token, "getUpdates", {"timeout": 0})
                 if r.get("ok") and r.get("result"):
-                    posts = []
+                    posts: list[dict] = []
                     for update in reversed(r["result"]):
                         msg = update.get("channel_post") or update.get(
                             "message", {}
@@ -240,7 +240,7 @@ class FarmAnalytics:
         return result
 
     def farm_status(self) -> list[dict]:
-        results = []
+        results: list[dict] = []
         for entry in os.listdir(self.channels_dir):
             env_path = os.path.join(self.channels_dir, entry, ".env")
             if os.path.isfile(env_path):
