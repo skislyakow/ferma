@@ -50,7 +50,7 @@ class PostFilter:
         self._reload()
         self.update_engagement_scores()
         posts = self.db.get_unpublished_posts(limit=limit * 5)
-        clean = []
+        clean: list = []
         for p in posts:
             if len(clean) >= limit:
                 break
