@@ -5,6 +5,7 @@ Parses r/Forest via RSS, translates to Russian, posts to VK wall.
 Usage:
     python core/forest/run_forest.py channels/forest/.env
 """
+
 import os
 import sys
 import time
@@ -13,15 +14,22 @@ import re
 import asyncio
 from html import unescape
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0,
+    os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ),
+)
 
-from dotenv import dotenv_values
-from core.crosspost.vk_poster import VKPoster
+from dotenv import dotenv_values  # noqa: E402
+from core.crosspost.vk_poster import VKPoster  # noqa: E402
 
 MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
-TRACKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "published.json")
+TRACKER_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "published.json"
+)
 
 
 def load_published():
@@ -38,6 +46,7 @@ def save_published(posted):
 
 def translate_text(text, api_key, folder_id):
     import requests
+
     if not text or not api_key:
         return text
     try:
@@ -61,36 +70,46 @@ def translate_text(text, api_key, folder_id):
 
 
 def is_russian(text):
-    return bool(re.search(r'[\u0400-\u04FF]', text))
+    return bool(re.search(r"[\u0400-\u04FF]", text))
 
 
 def fetch_entries(subreddit):
     import feedparser
+
     url = f"https://www.reddit.com/r/{subreddit}/new/.rss"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
     for attempt in range(3):
         feed = feedparser.parse(url, agent=headers["User-Agent"])
         if feed.entries:
             return feed.entries
         if attempt < 2:
-            print(f"[Forest] RSS empty (attempt {attempt+1}/3), retrying in 30s...")
+            print(
+                f"[Forest] RSS empty (attempt {attempt + 1}/3), retrying in 30s..."
+            )
             time.sleep(30)
     return feed.entries
 
 
 def extract_image_urls(entry: dict) -> list[str]:
     urls: list[str] = []
-    summary = (entry.get("summary") or entry.get("description") or "")
+    summary = entry.get("summary") or entry.get("description") or ""
     for m in re.finditer(r'<img[^>]+src="([^"]+)"', summary):
         url = unescape(m.group(1))
-        url = re.sub(r'\?width=\d+&.*', '', url)
-        url = url.replace("preview.redd.it", "i.redd.it").replace("external-i.redd.it", "i.redd.it")
+        url = re.sub(r"\?width=\d+&.*", "", url)
+        url = url.replace("preview.redd.it", "i.redd.it").replace(
+            "external-i.redd.it", "i.redd.it"
+        )
         url = url.replace("external-i.redd.it", "i.redd.it")
         if url not in urls:
             urls.append(url)
     if not urls:
         link = entry.get("link", "")
-        if any(link.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp")):
+        if any(
+            link.endswith(ext)
+            for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp")
+        ):
             urls.append(link)
         elif "i.redd.it" in link:
             urls.append(link)
@@ -99,12 +118,17 @@ def extract_image_urls(entry: dict) -> list[str]:
 
 def fetch_reddit_images(post_url):
     import requests
+
     try:
         old_url = post_url.replace("www.reddit.com", "old.reddit.com")
         json_url = old_url.rstrip("/") + ".json"
-        r = requests.get(json_url, timeout=15, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        })
+        r = requests.get(
+            json_url,
+            timeout=15,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            },
+        )
         if r.status_code != 200:
             return []
         data = r.json()
@@ -117,8 +141,10 @@ def fetch_reddit_images(post_url):
                     s = meta.get("s", {})
                     img_url = s.get("u") or s.get("gif") or ""
                     img_url = unescape(img_url)
-                    img_url = img_url.replace("preview.redd.it", "i.redd.it").replace("external-i.redd.it", "i.redd.it")
-                    img_url = re.sub(r'\?width=\d+&.*', '', img_url)
+                    img_url = img_url.replace(
+                        "preview.redd.it", "i.redd.it"
+                    ).replace("external-i.redd.it", "i.redd.it")
+                    img_url = re.sub(r"\?width=\d+&.*", "", img_url)
                     if img_url and img_url not in images:
                         images.append(img_url)
         else:
@@ -126,11 +152,15 @@ def fetch_reddit_images(post_url):
             if preview:
                 src = preview[0].get("source", {})
                 img_url = unescape(src.get("url", ""))
-                img_url = img_url.replace("preview.redd.it", "i.redd.it").replace("external-i.redd.it", "i.redd.it")
-                img_url = re.sub(r'\?width=\d+&.*', '', img_url)
+                img_url = img_url.replace(
+                    "preview.redd.it", "i.redd.it"
+                ).replace("external-i.redd.it", "i.redd.it")
+                img_url = re.sub(r"\?width=\d+&.*", "", img_url)
                 if img_url:
                     images.append(img_url)
-            post_url_str = post_data.get("url_overridden_by_dest") or post_data.get("url", "")
+            post_url_str = post_data.get(
+                "url_overridden_by_dest"
+            ) or post_data.get("url", "")
             if post_url_str and "i.redd.it" in post_url_str:
                 base = post_url_str.split("?")[0]
                 if base not in images:
@@ -142,12 +172,15 @@ def fetch_reddit_images(post_url):
 
 def download_image(url, filename):
     import requests
+
     try:
         ext = url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
         if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
             ext = "jpg"
         local = os.path.join(MEDIA_DIR, f"{filename}.{ext}")
-        r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        r = requests.get(
+            url, timeout=20, headers={"User-Agent": "Mozilla/5.0"}
+        )
         r.raise_for_status()
         ct = r.headers.get("content-type", "")
         if "text/html" in ct or len(r.content) < 1000:
@@ -168,7 +201,9 @@ async def main(env_path: str):
     env = dotenv_values(env_path)
     vk_token = env.get("VK_TOKEN", "")
     vk_group_id = env.get("VK_GROUP_ID", "")
-    subreddits_raw = env.get("REDDIT_SUBREDDITS", "") or env.get("REDDIT_SUBREDDIT", "Forest")
+    subreddits_raw = env.get("REDDIT_SUBREDDITS", "") or env.get(
+        "REDDIT_SUBREDDIT", "Forest"
+    )
     subreddits = [s.strip() for s in subreddits_raw.split(",") if s.strip()]
     if not subreddits:
         subreddits = ["Forest"]
@@ -184,7 +219,9 @@ async def main(env_path: str):
     published = load_published()
     sub_idx = 0
 
-    print(f"[Forest] Starting. Subreddits: {', '.join('r/' + s for s in subreddits)}")
+    print(
+        f"[Forest] Starting. Subreddits: {', '.join('r/' + s for s in subreddits)}"
+    )
     print(f"[Forest] VK group: {vk_group_id}")
     print(f"[Forest] Already published: {len(published)} posts")
     print(f"[Forest] Interval: {interval}s")
@@ -197,7 +234,10 @@ async def main(env_path: str):
             new_count = 0
 
             for entry in entries:
-                pid = entry.get("id", "").split("/")[-1] or entry.get("link", "").split("/")[-2]
+                pid = (
+                    entry.get("id", "").split("/")[-1]
+                    or entry.get("link", "").split("/")[-2]
+                )
                 if pid in published:
                     continue
 
@@ -207,23 +247,31 @@ async def main(env_path: str):
                 if not title:
                     continue
 
-                title = re.sub(r'\s+', ' ', title).strip()
+                title = re.sub(r"\s+", " ", title).strip()
 
                 if not is_russian(title):
-                    title = await asyncio.to_thread(translate_text, title, yc_api_key, yc_folder_id)
+                    title = await asyncio.to_thread(
+                        translate_text, title, yc_api_key, yc_folder_id
+                    )
 
                 post_text = format_post(title)
 
                 image_urls = extract_image_urls(entry)
                 media_path = None
                 if image_urls:
-                    media_path = await asyncio.to_thread(download_image, image_urls[0], f"for_{pid}")
+                    media_path = await asyncio.to_thread(
+                        download_image, image_urls[0], f"for_{pid}"
+                    )
 
                 if not media_path and link:
-                    reddit_images = await asyncio.to_thread(fetch_reddit_images, link)
+                    reddit_images = await asyncio.to_thread(
+                        fetch_reddit_images, link
+                    )
                     if reddit_images:
                         image_urls = reddit_images
-                        media_path = await asyncio.to_thread(download_image, image_urls[0], f"for_{pid}")
+                        media_path = await asyncio.to_thread(
+                            download_image, image_urls[0], f"for_{pid}"
+                        )
 
                 if not media_path:
                     continue
@@ -249,11 +297,14 @@ async def main(env_path: str):
                 await asyncio.sleep(3)
 
             if new_count == 0:
-                print(f"[Forest] No new posts (checked {len(entries)} entries)")
+                print(
+                    f"[Forest] No new posts (checked {len(entries)} entries)"
+                )
 
         except Exception as e:
             print(f"[Forest] Error: {e}")
             import traceback
+
             traceback.print_exc()
 
         await asyncio.sleep(interval)

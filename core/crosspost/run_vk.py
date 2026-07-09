@@ -14,8 +14,8 @@ import html as _html
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from core.crosspost.vk_poster import VKPoster
-from dotenv import dotenv_values
+from core.crosspost.vk_poster import VKPoster  # noqa: E402
+from dotenv import dotenv_values  # noqa: E402
 
 MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vk_media")
 os.makedirs(MEDIA_DIR, exist_ok=True)

@@ -7,12 +7,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.config import load_channel_config
-from core.db.database import Database
-from core.parser.web_parser import WebParser
-from core.filter.filters import PostFilter
-from core.translator.translator import Translator
-from core.publisher.publisher import Publisher
+from core.config import load_channel_config  # noqa: E402
+from core.db.database import Database  # noqa: E402
+from core.parser.web_parser import WebParser  # noqa: E402
+from core.filter.filters import PostFilter  # noqa: E402
+from core.translator.translator import Translator  # noqa: E402
+from core.publisher.publisher import Publisher  # noqa: E402
 
 
 def run_channel(env_path: str, once: bool = False):

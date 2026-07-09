@@ -17,12 +17,12 @@ from dotenv import dotenv_values
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from core.config import load_channel_config
-from core.lightning.collector import LightningCollector
-from core.translator.translator import Translator
-from core.publisher.publisher import Publisher
-from core.db.database import Database
-from core.filter.manage import load_filters
+from core.config import load_channel_config  # noqa: E402
+from core.lightning.collector import LightningCollector  # noqa: E402
+from core.translator.translator import Translator  # noqa: E402
+from core.publisher.publisher import Publisher  # noqa: E402
+from core.db.database import Database  # noqa: E402
+from core.filter.manage import load_filters  # noqa: E402
 from core.crosspost.vk_poster import VKPoster
 
 BREAKING_KEYWORDS = [
