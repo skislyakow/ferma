@@ -37,7 +37,7 @@ class LightningCollector:
                     last_id = self._last_msg_ids.get(ch, 0)
                     messages = await self.client.get_messages(entity, limit=5)
 
-                    for msg in reversed(messages):
+                    for msg in reversed(messages):  # type: ignore[reportCallIssue]
                         if msg.id <= last_id:
                             continue
                         self._last_msg_ids[ch] = max(
