@@ -3,7 +3,14 @@ from telethon import TelegramClient
 
 
 class LightningCollector:
-    def __init__(self, api_id: int, api_hash: str, phone: str, session_path: str, poll_interval: int = 30):
+    def __init__(
+        self,
+        api_id: int,
+        api_hash: str,
+        phone: str,
+        session_path: str,
+        poll_interval: int = 30,
+    ):
         self.client = TelegramClient(session_path, api_id, api_hash)
         self.phone = phone
         self._handler = None
@@ -16,10 +23,12 @@ class LightningCollector:
         self._handler = handler
 
     async def start(self, channels: list[str]):
-        await self.client.start(phone=self.phone)
+        await self.client.start(phone=self.phone)  # type: ignore[reportGeneralTypeIssues]
         self._channels = channels
         self._running = True
-        print(f"[Lightning] Polling {len(channels)} channels every {self.poll_interval}s...")
+        print(
+            f"[Lightning] Polling {len(channels)} channels every {self.poll_interval}s..."
+        )
 
         while self._running:
             for ch in channels:
@@ -31,7 +40,9 @@ class LightningCollector:
                     for msg in reversed(messages):
                         if msg.id <= last_id:
                             continue
-                        self._last_msg_ids[ch] = max(self._last_msg_ids.get(ch, 0), msg.id)
+                        self._last_msg_ids[ch] = max(
+                            self._last_msg_ids.get(ch, 0), msg.id
+                        )
                         if self._handler:
                             await self._handler(msg)
 
