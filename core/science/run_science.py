@@ -50,7 +50,7 @@ def fetch_entries(subreddit):
     return feed.entries
 
 
-def extract_image_urls(entry):
+def extract_image_urls(entry: dict) -> list[str]:
     urls: list[str] = []
     summary = (entry.get("summary") or entry.get("description") or "")
     for m in re.finditer(r'<img[^>]+src="([^"]+)"', summary):
