@@ -244,7 +244,6 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         return False
 
     total_published = db.get_stats()["published"]
-    total_published += 1
 
     # Pass a copy to Publisher (it will delete it); keep original for VK
     pub_media = vk_copy if vk_copy else media_path
@@ -261,6 +260,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     )
 
     if success:
+        total_published += 1
         db.save_post(
             source_channel=source_channel,
             source_message_id=source_msg_id,
@@ -422,7 +422,6 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 m_type = "photo"
 
             total_published = db.get_stats()["published"]
-            total_published += 1
 
             pub_media = vk_copy if vk_copy else m_path
             success = pub.publish(
@@ -437,6 +436,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
             )
 
             if success:
+                total_published += 1
                 db.mark_published(post_id)
                 print(f"[RU] Published from {source_channel}: {text[:50]}...")
                 if vk_copy and os.path.exists(m_path):
@@ -705,7 +705,6 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     post_text += f"\n\n{_repost_link(cfg['TARGET_CHANNEL'])} - {source_channel}"
 
                     total_published = db.get_stats()["published"]
-                    total_published += 1
 
                     vk_copy = _vk_prepare_copy(media_path, cfg)
                     if not media_path:
@@ -725,6 +724,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     )
 
                     if success:
+                        total_published += 1
                         db.save_post(
                             source_channel=source_channel,
                             source_message_id=source_msg_id,

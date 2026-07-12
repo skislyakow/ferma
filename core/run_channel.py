@@ -65,7 +65,6 @@ def run_channel(env_path: str, once: bool = False):
             continue
 
         print(f"[{name}] Publishing #{post_id}...")
-        total_published += 1
         success = pub.publish(
             text=translated,
             chat_id=cfg["TARGET_CHANNEL"],
@@ -77,6 +76,7 @@ def run_channel(env_path: str, once: bool = False):
         )
         if success:
             db.mark_published(post_id)
+            total_published += 1
 
     stats = db.get_stats()
     print(f"[{name}] Stats: {stats}")
