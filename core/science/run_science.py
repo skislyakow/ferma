@@ -21,19 +21,24 @@ from core.crosspost.vk_poster import VKPoster  # noqa: E402
 MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
-TRACKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "published.json")
-
-
-def load_published():
-    if os.path.exists(TRACKER_PATH):
-        with open(TRACKER_PATH) as f:
+def load_published(tracker_path):
+    if os.path.exists(tracker_path):
+        with open(tracker_path) as f:
             return set(json.load(f))
     return set()
 
 
-def save_published(posted):
-    with open(TRACKER_PATH, "w") as f:
-        json.dump(list(posted), f)
+def save_published(posted, tracker_path):
+    import tempfile
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(tracker_path), suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            json.dump(list(posted), f)
+        os.replace(tmp_path, tracker_path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
 
 
 def fetch_entries(subreddit):
@@ -242,7 +247,8 @@ async def main(env_path: str):
         sys.exit(1)
 
     vk = VKPoster(vk_token, vk_group_id)
-    published = load_published()
+    tracker_path = os.path.join(os.path.dirname(env_path), "published.json")
+    published = load_published(tracker_path)
     channel_name = env.get("CHANNEL_NAME", subreddit)
 
     print(f"[Science] Starting. Subreddit: r/{subreddit}")
@@ -296,7 +302,7 @@ async def main(env_path: str):
                             attachment = vk.upload_photo(media_path)
                     vk.post_to_wall(message=post_text, attachment=attachment)
                     published.add(pid)
-                    save_published(published)
+                    save_published(published, tracker_path)
                     new_count += 1
                     label = "video" if media_type == "video" else "photo"
                     print(f"[Science] Posted ({label}): {title[:60]}...")
