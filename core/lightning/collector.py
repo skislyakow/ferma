@@ -2,7 +2,6 @@ import asyncio
 import random
 from telethon import TelegramClient
 from telethon.errors import RPCError
-from telethon.network import ConnectionError as TelethonConnectionError
 
 
 class LightningCollector:
@@ -83,7 +82,7 @@ class LightningCollector:
                             except Exception as e:
                                 print(f"[Lightning] Handler error on {ch}:{msg.id}: {e}")
 
-                except TelethonConnectionError:
+                except (OSError, asyncio.TimeoutError):
                     print(f"[Lightning] Connection error while polling {ch}, will reconnect")
                     await self._ensure_connected()
                 except RPCError as e:
