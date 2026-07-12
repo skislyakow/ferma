@@ -8,6 +8,7 @@ anon.session
 # Runtime data
 *.db
 bot.log
+channels/*/published.json
 
 # Downloaded media (reproducible)
 channels/*/media/
