@@ -1,9 +1,9 @@
 """
-Урбанистика — VK-only channel.
-Parses r/UrbanHell via RSS, translates to Russian, posts to VK wall.
+VK-only Reddit RSS channel.
+Parses subreddits via RSS, translates to Russian, posts photos/videos to VK wall.
 
 Usage:
-    python core/urbanistika/run_urbanistika.py channels/urbanistika/.env
+    python core/urbanistika/run_urbanistika.py channels/<name>/.env
 """
 import os
 import sys
@@ -62,6 +62,14 @@ def translate_text(text, api_key, folder_id):
 
 def is_russian(text):
     return bool(re.search(r'[\u0400-\u04FF]', text))
+
+
+def detect_video(entry):
+    summary = (entry.get("summary") or entry.get("description") or "")
+    m = re.search(r'href="(https?://v\.redd\.it/[^"]+)"', summary)
+    if m:
+        return m.group(1).split("?")[0].rstrip("/")
+    return None
 
 
 def fetch_entries(subreddit):
@@ -161,12 +169,107 @@ def download_image(url, filename):
         return None
 
 
-def format_post(title):
-    return f"🏙 {title}"
+def download_reddit_video(video_url, filename):
+    import requests as _req
+    try:
+        video_id = video_url.rstrip("/").split("/")[-1]
+        manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
+        r = _req.get(manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            print(f"[Urbanistika] DASH manifest {r.status_code}")
+            return None
+
+        text = r.text
+        has_audio = 'contentType="audio"' in text
+
+        video_rep = re.findall(
+            r'<Representation[^>]+bandwidth="(\d+)"[^>]+height="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+            text, re.DOTALL
+        )
+        if not video_rep:
+            print("[Urbanistika] No video representations found")
+            return None
+
+        best = max(video_rep, key=lambda x: int(x[1]))
+        video_base = best[2]
+        video_height = best[1]
+
+        audio_base = None
+        if has_audio:
+            audio_section = text[text.index('contentType="audio"'):]
+            audio_rep = re.findall(
+                r'<Representation[^>]+bandwidth="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+                audio_section, re.DOTALL
+            )
+            if audio_rep:
+                best_audio = max(audio_rep, key=lambda x: int(x[0]))
+                audio_base = best_audio[1]
+
+        video_file = None
+        audio_file = None
+        merged = os.path.join(MEDIA_DIR, f"{filename}.mp4")
+
+        url = f"https://v.redd.it/{video_id}/{video_base}"
+        vr = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+        vr.raise_for_status()
+        video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
+        with open(video_file, "wb") as f:
+            for chunk in vr.iter_content(8192):
+                f.write(chunk)
+
+        if audio_base:
+            url = f"https://v.redd.it/{video_id}/{audio_base}"
+            ar = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+            ar.raise_for_status()
+            audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
+            with open(audio_file, "wb") as f:
+                for chunk in ar.iter_content(8192):
+                    f.write(chunk)
+
+        if video_file and audio_file:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", video_file, "-i", audio_file,
+                 "-c:v", "copy", "-c:a", "aac", "-strict", "experimental", merged],
+                capture_output=True, timeout=60
+            )
+            if result.returncode == 0:
+                os.remove(video_file)
+                os.remove(audio_file)
+                print(f"[Urbanistika] Merged {video_height}p video + audio")
+                return merged
+            else:
+                print(f"[Urbanistika] ffmpeg merge failed: {result.stderr[:200]}")
+
+        if video_file:
+            os.rename(video_file, merged)
+            if audio_file and os.path.exists(audio_file):
+                os.remove(audio_file)
+            print(f"[Urbanistika] Downloaded {video_height}p video (no audio)")
+            return merged
+
+        return None
+    except Exception as e:
+        print(f"[Urbanistika] Video download failed: {e}")
+        return None
+
+
+def format_post(title, icon="🔥"):
+    return f"{icon} {title}"
+
+
+def _channel_icon(name):
+    icons = {
+        "Урбанистика": "🏙",
+        "Интересно!": "🔥",
+    }
+    return icons.get(name, "🔥")
 
 
 async def main(env_path: str):
     env = dotenv_values(env_path)
+    channel_name = env.get("CHANNEL_NAME", "Канал")
+    icon = _channel_icon(channel_name)
     vk_token = env.get("VK_TOKEN", "")
     vk_group_id = env.get("VK_GROUP_ID", "")
     subreddits_raw = env.get("REDDIT_SUBREDDITS", "") or env.get("REDDIT_SUBREDDIT", "UrbanHell")
@@ -178,17 +281,17 @@ async def main(env_path: str):
     yc_folder_id = env.get("YC_FOLDER_ID", "")
 
     if not vk_token or not vk_group_id:
-        print("[Urbanistika] Missing VK_TOKEN or VK_GROUP_ID in .env")
+        print(f"[{channel_name}] Missing VK_TOKEN or VK_GROUP_ID in .env")
         sys.exit(1)
 
     vk = VKPoster(vk_token, vk_group_id)
     published = load_published()
     sub_idx = 0
 
-    print(f"[Urbanistika] Starting. Subreddits: {', '.join('r/' + s for s in subreddits)}")
-    print(f"[Urbanistika] VK group: {vk_group_id}")
-    print(f"[Urbanistika] Already published: {len(published)} posts")
-    print(f"[Urbanistika] Interval: {interval}s")
+    print(f"[{channel_name}] Starting. Subreddits: {', '.join('r/' + s for s in subreddits)}")
+    print(f"[{channel_name}] VK group: {vk_group_id}")
+    print(f"[{channel_name}] Already published: {len(published)} posts")
+    print(f"[{channel_name}] Interval: {interval}s")
 
     while True:
         try:
@@ -213,33 +316,43 @@ async def main(env_path: str):
                 if not is_russian(title):
                     title = await asyncio.to_thread(translate_text, title, yc_api_key, yc_folder_id)
 
-                post_text = format_post(title)
+                post_text = format_post(title, icon)
 
-                image_urls = extract_image_urls(entry)
+                video_url = detect_video(entry)
                 media_path = None
-                if image_urls:
-                    media_path = await asyncio.to_thread(download_image, image_urls[0], f"urb_{pid}")
+                media_type = "photo"
+
+                if video_url:
+                    media_path = await asyncio.to_thread(download_reddit_video, video_url, f"media_{pid}")
+                    if media_path:
+                        media_type = "video"
+
+                if not media_path:
+                    image_urls = extract_image_urls(entry)
+                    if image_urls:
+                        media_path = await asyncio.to_thread(download_image, image_urls[0], f"media_{pid}")
 
                 if not media_path and link:
                     reddit_images = await asyncio.to_thread(fetch_reddit_images, link)
                     if reddit_images:
-                        image_urls = reddit_images
-                        media_path = await asyncio.to_thread(download_image, image_urls[0], f"urb_{pid}")
+                        media_path = await asyncio.to_thread(download_image, reddit_images[0], f"media_{pid}")
 
                 if not media_path:
                     continue
 
                 try:
                     attachment = None
-                    if media_path:
+                    if media_type == "video":
+                        attachment = vk.upload_video(media_path, title=title[:100])
+                    else:
                         attachment = vk.upload_photo(media_path)
                     vk.post_to_wall(message=post_text, attachment=attachment)
                     published.add(pid)
                     save_published(published)
                     new_count += 1
-                    print(f"[Urbanistika] Posted (photo): {title[:60]}...")
+                    print(f"[{channel_name}] Posted ({media_type}): {title[:60]}...")
                 except Exception as e:
-                    print(f"[Urbanistika] Failed to post: {e}")
+                    print(f"[{channel_name}] Failed to post: {e}")
 
                 if media_path and os.path.exists(media_path):
                     try:
@@ -250,10 +363,10 @@ async def main(env_path: str):
                 await asyncio.sleep(3)
 
             if new_count == 0:
-                print(f"[Urbanistika] No new posts (checked {len(entries)} entries)")
+                print(f"[{channel_name}] No new posts (checked {len(entries)} entries)")
 
         except Exception as e:
-            print(f"[Urbanistika] Error: {e}")
+            print(f"[{channel_name}] Error: {e}")
             import traceback
             traceback.print_exc()
 
