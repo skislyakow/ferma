@@ -155,34 +155,32 @@ class FarmAnalytics:
                 except Exception:
                     pass
 
-            vk_log = self._read_vk_log(name, 10)
-            result["vk_posts"] = []
-            for line in vk_log:
-                if "Posted" in line:
-                    tag = (
-                        "photo"
-                        if "(photo)" in line
-                        else "video"
-                        if "(video)" in line
-                        else "text"
-                    )
-                    title = (
-                        line.split("...", 1)[0].split("): ", 1)[-1]
-                        if "): " in line
-                        else line
-                    )
-                    result["vk_posts"].append(
-                        {"type": tag, "title": title, "ok": True}
-                    )
-                elif "Failed" in line:
-                    err = (
-                        line.split("VK API error ", 1)[-1]
-                        if "VK API error" in line
-                        else line
-                    )
-                    result["vk_posts"].append(
-                        {"type": "error", "title": err, "ok": False}
-                    )
+            try:
+                r = self._vk_api(vk_token, "wall.get", {
+                    "owner_id": f"-{vk_group_id}",
+                    "count": 10,
+                    "filter": "owner",
+                })
+                if "response" in r:
+                    for post in r["response"].get("items", []):
+                        post_type = "text"
+                        for att in post.get("attachments", []):
+                            t = att.get("type", "")
+                            if t == "video":
+                                post_type = "video"
+                                break
+                            elif t == "photo" and post_type == "text":
+                                post_type = "photo"
+                        result["vk_posts"].append({
+                            "id": post["id"],
+                            "date": post["date"],
+                            "title": post.get("text", "")[:80],
+                            "type": post_type,
+                            "views": post.get("views", {}).get("count", 0),
+                            "ok": True,
+                        })
+            except Exception:
+                pass
         else:
             if token:
                 r = self._bot_api(

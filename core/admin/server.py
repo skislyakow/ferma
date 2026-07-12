@@ -455,10 +455,13 @@ async def channel_detail(name: str, token: str | None = Query(None)):
     for p in s.get("last_posts", []):
         posts += f"<div class='stat'><span class='label'>#{p['id']} {p['date'][:16]}</span><span class='value'>👁 {p['views']} 💬 {p['reactions']}</span></div>"
     if not posts and s.get("vk_posts"):
+        import datetime
         for p in s["vk_posts"]:
             icon = "✅" if p["ok"] else "❌"
             tag = f"[{p['type']}]"
-            posts += f"<div class='stat'><span class='label'>{icon} {tag} {p['title'][:80]}</span></div>"
+            dt = datetime.datetime.fromtimestamp(p["date"]).strftime("%d.%m %H:%M") if p.get("date") else ""
+            views = f"\U0001F441 {p.get('views', 0)}" if p.get("views") else ""
+            posts += f"<div class='stat'><span class='label'>{icon} {tag} {p['title'][:60]}</span><span class='value'>{dt} {views}</span></div>"
     if not posts:
         posts = "<div class='stat'><span class='label'>Пока нет постов</span></div>"
     running = screen_running(name)
