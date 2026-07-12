@@ -196,6 +196,99 @@ def download_image(url, filename):
         return None
 
 
+def detect_video(entry):
+    summary = (entry.get("summary") or entry.get("description") or "")
+    m = re.search(r'href="(https?://v\.redd\.it/[^"]+)"', summary)
+    if m:
+        return m.group(1).split("?")[0].rstrip("/")
+    return None
+
+
+def download_reddit_video(video_url, filename):
+    import requests as _req
+    try:
+        video_id = video_url.rstrip("/").split("/")[-1]
+        manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
+        r = _req.get(manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            print(f"[Forest] DASH manifest {r.status_code}")
+            return None
+
+        text = r.text
+        has_audio = 'contentType="audio"' in text
+
+        video_rep = re.findall(
+            r'<Representation[^>]+bandwidth="(\d+)"[^>]+height="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+            text, re.DOTALL
+        )
+        if not video_rep:
+            print("[Forest] No video representations found")
+            return None
+
+        best = max(video_rep, key=lambda x: int(x[1]))
+        video_base = best[2]
+        video_height = best[1]
+
+        audio_base = None
+        if has_audio:
+            audio_section = text[text.index('contentType="audio"'):]
+            audio_rep = re.findall(
+                r'<Representation[^>]+bandwidth="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
+                audio_section, re.DOTALL
+            )
+            if audio_rep:
+                best_audio = max(audio_rep, key=lambda x: int(x[0]))
+                audio_base = best_audio[1]
+
+        video_file = None
+        audio_file = None
+        merged = os.path.join(MEDIA_DIR, f"{filename}.mp4")
+
+        url = f"https://v.redd.it/{video_id}/{video_base}"
+        vr = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+        vr.raise_for_status()
+        video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
+        with open(video_file, "wb") as f:
+            for chunk in vr.iter_content(8192):
+                f.write(chunk)
+
+        if audio_base:
+            url = f"https://v.redd.it/{video_id}/{audio_base}"
+            ar = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
+            ar.raise_for_status()
+            audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
+            with open(audio_file, "wb") as f:
+                for chunk in ar.iter_content(8192):
+                    f.write(chunk)
+
+        if video_file and audio_file:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", video_file, "-i", audio_file,
+                 "-c:v", "copy", "-c:a", "aac", "-strict", "experimental", merged],
+                capture_output=True, timeout=60
+            )
+            if result.returncode == 0:
+                os.remove(video_file)
+                os.remove(audio_file)
+                print(f"[Forest] Merged {video_height}p video + audio")
+                return merged
+            else:
+                print(f"[Forest] ffmpeg merge failed: {result.stderr[:200]}")
+
+        if video_file:
+            os.rename(video_file, merged)
+            if audio_file and os.path.exists(audio_file):
+                os.remove(audio_file)
+            print(f"[Forest] Downloaded {video_height}p video (no audio)")
+            return merged
+
+        return None
+    except Exception as e:
+        print(f"[Forest] Video download failed: {e}")
+        return None
+
+
 def format_post(title):
     return f"🌲 {title}"
 
@@ -260,21 +353,29 @@ async def main(env_path: str):
 
                 post_text = format_post(title)
 
-                image_urls = extract_image_urls(entry)
+                video_url = detect_video(entry)
                 media_path = None
-                if image_urls:
-                    media_path = await asyncio.to_thread(
-                        download_image, image_urls[0], f"for_{pid}"
-                    )
+                media_type = "photo"
+
+                if video_url:
+                    media_path = await asyncio.to_thread(download_reddit_video, video_url, f"media_{pid}")
+                    if media_path:
+                        media_type = "video"
+
+                if not media_path:
+                    image_urls = extract_image_urls(entry)
+                    if image_urls:
+                        media_path = await asyncio.to_thread(
+                            download_image, image_urls[0], f"media_{pid}"
+                        )
 
                 if not media_path and link:
                     reddit_images = await asyncio.to_thread(
                         fetch_reddit_images, link
                     )
                     if reddit_images:
-                        image_urls = reddit_images
                         media_path = await asyncio.to_thread(
-                            download_image, image_urls[0], f"for_{pid}"
+                            download_image, reddit_images[0], f"media_{pid}"
                         )
 
                 if not media_path:
@@ -282,13 +383,15 @@ async def main(env_path: str):
 
                 try:
                     attachment = None
-                    if media_path:
+                    if media_type == "video":
+                        attachment = vk.upload_video(media_path, title=title[:100])
+                    else:
                         attachment = vk.upload_photo(media_path)
                     vk.post_to_wall(message=post_text, attachment=attachment)
                     published.add(pid)
                     save_published(published, tracker_path)
                     new_count += 1
-                    print(f"[Forest] Posted (photo): {title[:60]}...")
+                    print(f"[Forest] Posted ({media_type}): {title[:60]}...")
                 except Exception as e:
                     print(f"[Forest] Failed to post: {e}")
 
