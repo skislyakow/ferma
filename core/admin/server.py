@@ -965,10 +965,12 @@ def _start_screen(name: str):
     from dotenv import dotenv_values
 
     cfg = dotenv_values(env_path)
-    is_lightning = cfg.get("CHANNEL_TYPE", "") == "lightning"
+    ctype = cfg.get("CHANNEL_TYPE", "")
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
-    if is_lightning:
+    if ctype == "lightning":
         entry = f"core/lightning/run_lightning.py {env_path}"
+    elif ctype == "redditvk":
+        entry = f"core/urbanistika/run_urbanistika.py {env_path}"
     else:
         entry = f"core/run_channel.py {env_path}"
     cmd = (
