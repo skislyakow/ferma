@@ -605,7 +605,9 @@ async def edit_channel_form(name: str, token: str | None = Query(None)):
     def v(key, default=""):
         return mask_value(key, cfg.get(key, default), demo)
 
-    is_lightning = cfg.get("CHANNEL_TYPE", "") == "lightning"
+    channel_type = cfg.get("CHANNEL_TYPE", "normal")
+    is_lightning = channel_type == "lightning"
+    is_redditvk = channel_type == "redditvk"
     rm_checked = (
         "checked"
         if cfg.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes")
@@ -614,23 +616,26 @@ async def edit_channel_form(name: str, token: str | None = Query(None)):
     disabled = " disabled" if demo else ""
     body = f"""
     <h1>Настройки: {name} <span style='font-size:14px;color:#8b949e'>{
-        "⚡️ Lightning" if is_lightning else "📰 Normal"
+        "⚡️ Lightning" if is_lightning else "📰 Reddit VK" if is_redditvk else "📰 Normal"
     }</span></h1>
     <form action='/api/channel/{name}/update?token={token}' method='post'{
         ' class="demo-disabled"' if demo else ""
     }>
-        <input type='hidden' name='channel_type' value='{
-        "lightning" if is_lightning else "normal"
-    }'>
+        <input type='hidden' name='channel_type' value='{channel_type}'>
         <div class='form-group'><label>BOT_TOKEN</label><input type='text' name='bot_token' value='{
         v("BOT_TOKEN")
-    }' required{disabled}></div>
+    }'{" required" if not is_redditvk else ""}{disabled}></div>
         <div class='form-group'><label>TARGET_CHANNEL</label><input type='text' name='target_channel' value='{
         v("TARGET_CHANNEL")
-    }' required{disabled}></div>
+    }'{" required" if not is_redditvk else ""}{disabled}></div>
         <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' value='{
         v("SOURCE_CHANNELS")
-    }' required{disabled}></div>
+    }'{" required" if not is_redditvk else ""}{disabled}></div>
+        {
+        ""
+        if channel_type == "normal"
+        else ''
+    }
         {
         ""
         if not is_lightning
@@ -642,7 +647,6 @@ async def edit_channel_form(name: str, token: str | None = Query(None)):
         <div class='form-group'><label>TELEGRAM_PHONE</label><input type='text' name='phone' value='{}'{}></div>
         <div class='form-group'><label>RSS фиды (через запятую)</label><input type='text' name='rss_feeds' value='{}'{}></div>
         <div class='form-group'><label>RU доноры (через запятую)</label><input type='text' name='ru_source_channels' value='{}'{}></div>
-        <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' value='{}'{}></div>
         '''.format(
             v("TELEGRAM_API_ID"),
             disabled,
@@ -654,7 +658,18 @@ async def edit_channel_form(name: str, token: str | None = Query(None)):
             disabled,
             v("RU_SOURCE_CHANNELS"),
             disabled,
-            v("REDDIT_SUBREDDITS"),
+        )
+    }
+        {
+        ""
+        if not is_redditvk
+        else '''
+        <div class='form-group'><label>VK_TOKEN</label><input type='text' name='vk_token' value='{}'{}></div>
+        <div class='form-group'><label>VK_GROUP_ID</label><input type='text' name='vk_group_id' value='{}'{}></div>
+        '''.format(
+            v("VK_TOKEN"),
+            disabled,
+            v("VK_GROUP_ID"),
             disabled,
         )
     }
@@ -672,8 +687,11 @@ async def edit_channel_form(name: str, token: str | None = Query(None)):
     }' step='0.1'{disabled}></div>
             <div class='form-group'><label>Постов за цикл</label><input type='number' name='posts_per_cycle' value='{
         v("POSTS_PER_CYCLE", "2")
-    }'{disabled}></div>
+    }' step='1'{disabled}></div>
         </div>
+        <div class='form-group'><label>Reddit сабреддиты (через запятую)</label><input type='text' name='reddit_subreddits' value='{
+        v("REDDIT_SUBREDDITS")
+    }'{disabled}></div>
         <div class='form-group'>
             <label><input type='checkbox' name='require_media' value='1' style='width:auto;margin-top:8px' {
         rm_checked
@@ -731,6 +749,8 @@ async def api_update_channel(
     rss_feeds: str = Form(""),
     ru_source_channels: str = Form(""),
     reddit_subreddits: str = Form(""),
+    vk_token: str = Form(""),
+    vk_group_id: str = Form(""),
 ):
     check_auth(token)
     if is_demo(token):
@@ -753,9 +773,8 @@ async def api_update_channel(
     reddit_list = ",".join(
         x.strip() for x in reddit_subreddits.split(",") if x.strip()
     )
-    is_lightning = channel_type == "lightning"
 
-    if is_lightning:
+    if channel_type == "lightning":
         env_content = f"""# RE:POST — Lightning News Channel
 CHANNEL_TYPE=lightning
 TELEGRAM_API_ID={api_id}
@@ -780,6 +799,25 @@ CPA_LINKS={cpa_list}
 CPA_INSERT_EVERY={cpa_insert_every}
 RSS_FEEDS={rss_list}
 RU_SOURCE_CHANNELS={ru_list}
+REDDIT_SUBREDDITS={reddit_list}
+"""
+    elif channel_type == "redditvk":
+        env_content = f"""# VK-only Reddit channel
+CHANNEL_TYPE=redditvk
+VK_TOKEN={vk_token}
+VK_GROUP_ID={vk_group_id}
+
+YC_TRANSLATE_API_KEY={yc_api_key}
+YC_FOLDER_ID={yc_folder_id}
+
+PUBLISH_INTERVAL_HOURS={publish_interval_hours}
+POSTS_PER_CYCLE={posts_per_cycle}
+
+SOURCE_LANG={source_lang}
+TARGET_LANG={target_lang}
+
+CPA_LINKS={cpa_list}
+CPA_INSERT_EVERY={cpa_insert_every}
 REDDIT_SUBREDDITS={reddit_list}
 """
     else:
@@ -970,7 +1008,10 @@ def _start_screen(name: str):
     if ctype == "lightning":
         entry = f"core/lightning/run_lightning.py {env_path}"
     elif ctype == "redditvk":
-        entry = f"core/urbanistika/run_urbanistika.py {env_path}"
+        if name == "interesting":
+            entry = f"core/interesting/run_interesting.py {env_path}"
+        else:
+            entry = f"core/urbanistika/run_urbanistika.py {env_path}"
     else:
         entry = f"core/run_channel.py {env_path}"
     cmd = (
