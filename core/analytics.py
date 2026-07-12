@@ -42,7 +42,9 @@ class FarmAnalytics:
             return {"error": "request failed"}
 
     def _read_vk_log(self, name: str, limit: int = 10) -> list:
-        log_path = os.path.join(self.channels_dir, name, "logs", f"{name}.log")
+        log_path = os.path.join(self.channels_dir, name, "bot.log")
+        if not os.path.exists(log_path):
+            log_path = os.path.join(self.channels_dir, name, "logs", f"{name}.log")
         if not os.path.exists(log_path):
             return []
         posts = []

@@ -193,8 +193,6 @@ async def dashboard(token: str | None = Query(None), msg: str | None = None):
             {extra}
             <div class='stat'><span class='label'>БД всего</span><span class='value'>{s["db"]["total"]}</span></div>
             <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s["db"]["published"]}</span></div>
-            <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s["db"]["skipped"]}</span></div>
-            <div class='stat'><span class='label'>Видео</span><span class='value'>{s["db"]["video"]}</span></div>
             <p style='margin-top:10px'{action_cls}>
                 <a href='/logs/{s["name"]}?token={token}'>[логи]</a>
                 <a href='/channel/{s["name"]}?token={token}' class='btn btn-primary btn-sm'>Управление</a>
@@ -521,8 +519,6 @@ async def channel_detail(name: str, token: str | None = Query(None)):
             <div class='stat'><span class='label'>Доноры</span><span class='value'>{s["donors"]}</span></div>
             <div class='stat'><span class='label'>БД всего</span><span class='value'>{s["db"]["total"]}</span></div>
             <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s["db"]["published"]}</span></div>
-            <div class='stat'><span class='label'>Пропущено</span><span class='value'>{s["db"]["skipped"]}</span></div>
-            <div class='stat'><span class='label'>Видео</span><span class='value'>{s["db"]["video"]}</span></div>
         </div>
         <div class='card'>
             <h2>Последние посты</h2>
