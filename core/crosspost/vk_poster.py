@@ -1,7 +1,9 @@
 import os
+import time
 import requests
 
 VK_API = "https://api.vk.com/method"
+RETRYABLE_CODES = {6, 9, 10}
 
 
 class VKPoster:
@@ -11,7 +13,7 @@ class VKPoster:
         self.api_v = api_version
         self.owner_id = -int(group_id)
 
-    def _call(self, method, params=None):
+    def _call(self, method, params=None, _retries=0):
         if params is None:
             params = {}
         params.update({
@@ -24,7 +26,13 @@ class VKPoster:
         except ValueError:
             raise Exception(f"VK API returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
         if data.get("error"):
-            raise Exception(f"VK API error [{data['error']['error_code']}]: {data['error']['error_msg']}")
+            code = data["error"]["error_code"]
+            if code in RETRYABLE_CODES and _retries < 3:
+                delay = data["error"].get("retry_after", 1 * (_retries + 1))
+                print(f"[VK] Rate limited (code {code}), retry {_retries+1}/3 in {delay}s")
+                time.sleep(delay)
+                return self._call(method, params, _retries + 1)
+            raise Exception(f"VK API error [{code}]: {data['error']['error_msg']}")
         return data.get("response")
 
     def _get_upload_url(self) -> str:
