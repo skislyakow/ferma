@@ -99,6 +99,7 @@ tr:hover { background:#1c2128; }
 .btn-warning { background:#9e6a03; color:#fff; }
 .btn-warning:hover { background:#bb8009; }
 .btn-sm { padding:4px 8px; font-size:12px; }
+button:disabled { opacity:0.4; cursor:not-allowed; }
 input,select { width:100%; padding:8px 12px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; font-size:14px; margin-bottom:12px; }
 input:focus { outline:none; border-color:#58a6ff; }
 label { display:block; margin-bottom:4px; color:#8b949e; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; }
