@@ -124,6 +124,7 @@ class Publisher:
             else:
                 if len(text) > 1024:
                     print("[Publisher] Text too long for photo caption, skipping image")
+                    self._cleanup_media(media_path)
                     payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
                     if parse_mode:
                         payload["parse_mode"] = parse_mode
@@ -150,4 +151,5 @@ class Publisher:
             return True
         except Exception as e:
             print(f"[Publisher] Failed: {e}")
+            self._cleanup_media(media_path)
             return False
