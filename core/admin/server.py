@@ -2,9 +2,12 @@ import os
 import sys
 import re
 import subprocess
+import hashlib
+import secrets
 
-from fastapi import FastAPI, Query, HTTPException, Form
+from fastapi import FastAPI, Query, HTTPException, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
 
 sys.path.insert(
@@ -16,7 +19,9 @@ sys.path.insert(
 
 from core.analytics import FarmAnalytics  # noqa: E402
 
-AUTH_TOKEN = os.environ.get("ADMIN_TOKEN", "ferma2026")
+ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
+ADMIN_PASS_HASH = os.environ.get("ADMIN_PASS_HASH", "")
+SECRET_KEY = os.environ.get("ADMIN_SECRET_KEY", secrets.token_hex(32))
 DEMO_TOKEN = "demo"
 FARM_DIR = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -36,8 +41,18 @@ SECRET_FIELDS = {
 }
 
 
-def is_demo(token: str | None) -> bool:
-    return token == DEMO_TOKEN
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(password: str) -> bool:
+    if not ADMIN_PASS_HASH:
+        return False
+    return hash_password(password) == ADMIN_PASS_HASH
+
+
+def is_demo(request: Request) -> bool:
+    return request.session.get("demo", False)
 
 
 def mask_value(key: str, value: str, demo: bool) -> str:
@@ -48,6 +63,7 @@ def mask_value(key: str, value: str, demo: bool) -> str:
 
 
 app = FastAPI(title="Ferma Admin")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie="ferma_session")
 
 CSS = """
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -90,10 +106,12 @@ form { max-width:600px; }
 .demo-banner { background:#1c3a5e; border:1px solid #388bfd; border-radius:8px; padding:12px 16px; margin-bottom:20px; color:#79c0ff; font-size:14px; }
 .demo-banner b { color:#f0f6fc; }
 .demo-disabled { opacity:0.4; pointer-events:none; }
+.login-box { max-width:400px; margin:80px auto; }
+.login-box h1 { text-align:center; }
 """
 
 
-def head(title, token, demo=False):
+def head(title, demo=False):
     demo_html = ""
     if demo:
         demo_html = "<div class='demo-banner'><b>Демо-режим</b> — просмотр интерфейса. Все действия и кнопки недоступны. Секретные данные скрыты.</div>"
@@ -107,7 +125,7 @@ function toggleType() {{
 }}
 </script>
 </head><body>
-<div class='nav'><a href='/?token={token}'>Панель</a><a href='/channels?token={token}'>Каналы</a><a href='/filters?token={token}'>Фильтры</a><a href='/add?token={token}'>+ Добавить канал</a></div>
+<div class='nav'><a href='/'>Панель</a><a href='/channels'>Каналы</a><a href='/filters'>Фильтры</a><a href='/add'>+ Добавить канал</a><span class='nav-right'><a href='/logout' class='btn btn-danger btn-sm'>Выйти</a></span></div>
 {demo_html}"""
 
 
@@ -115,9 +133,18 @@ def foot():
     return "</body></html>"
 
 
-def check_auth(token: str | None):
-    if token != AUTH_TOKEN and token != DEMO_TOKEN:
-        raise HTTPException(401, "Invalid token")
+def get_current_user(request: Request):
+    if request.session.get("user"):
+        return request.session
+    raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+
+def get_demo_user(request: Request):
+    if request.session.get("user"):
+        return request.session
+    if request.session.get("demo"):
+        return request.session
+    raise HTTPException(status_code=303, headers={"Location": "/login"})
 
 
 CHANNEL_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_\-]*$")
@@ -150,10 +177,54 @@ def get_bot_name(token: str) -> str:
     return "?"
 
 
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, msg: str | None = None):
+    if request.session.get("user"):
+        return RedirectResponse("/", 302)
+    msg_html = ""
+    if msg:
+        msg_html = f"<div class='msg msg-error'>{msg}</div>"
+    body = f"""
+    <div class='login-box'>
+        <h1>Ferma</h1>
+        {msg_html}
+        <div class='card'>
+            <form method='post' action='/login'>
+                <div class='form-group'><label>Логин</label><input type='text' name='username' required autofocus></div>
+                <div class='form-group'><label>Пароль</label><input type='password' name='password' required></div>
+                <p style='margin-top:16px'><button type='submit' class='btn btn-primary'>Войти</button></p>
+            </form>
+        </div>
+    </div>"""
+    return head("Вход — Ferma") + body + foot()
+
+
+@app.post("/login")
+async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    if username == ADMIN_USER and verify_password(password):
+        request.session["user"] = username
+        request.session["demo"] = False
+        return RedirectResponse("/", 302)
+    return RedirectResponse("/login?msg=Неверный+логин+или+пароль", 302)
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", 302)
+
+
+@app.get("/demo-login", response_class=HTMLResponse)
+async def demo_login(request: Request):
+    request.session["user"] = "demo"
+    request.session["demo"] = True
+    return RedirectResponse("/", 302)
+
+
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(token: str | None = Query(None), msg: str | None = None):
-    check_auth(token)
-    demo = is_demo(token)
+async def dashboard(request: Request, msg: str | None = None):
+    session = get_current_user(request)
+    demo = session.get("demo", False)
     analytics = FarmAnalytics()
     statuses = analytics.farm_status()
     msg_html = ""
@@ -186,7 +257,7 @@ async def dashboard(token: str | None = Query(None), msg: str | None = None):
         action_cls = " class='demo-disabled'" if demo else ""
         cards += f"""
         <div class='card'>
-            <h2 style='margin-top:0'><a href='/channel/{s["name"]}?token={token}'>{s["name"]}</a> <span style='float:right;font-size:13px;color:#8b949e'>{type_tag}</span></h2>
+            <h2 style='margin-top:0'><a href='/channel/{s["name"]}'>{s["name"]}</a> <span style='float:right;font-size:13px;color:#8b949e'>{type_tag}</span></h2>
             <div class='stat'><span class='label'>Статус</span><span class='value'>{status_tag}</span></div>
             <div class='stat'><span class='label'>Подписчики</span><span class='value'>{s["subscribers"]}</span></div>
             <div class='stat'><span class='label'>Доноры</span><span class='value'>{s["donors"]}</span></div>
@@ -194,24 +265,24 @@ async def dashboard(token: str | None = Query(None), msg: str | None = None):
             <div class='stat'><span class='label'>БД всего</span><span class='value'>{s["db"]["total"]}</span></div>
             <div class='stat'><span class='label'>Опубликовано</span><span class='value'>{s["db"]["published"]}</span></div>
             <p style='margin-top:10px'{action_cls}>
-                <a href='/logs/{s["name"]}?token={token}'>[логи]</a>
-                <a href='/channel/{s["name"]}?token={token}' class='btn btn-primary btn-sm'>Управление</a>
+                <a href='/logs/{s["name"]}'>[логи]</a>
+                <a href='/channel/{s["name"]}' class='btn btn-primary btn-sm'>Управление</a>
             </p>
         </div>"""
     body = (
         f"<h1>Панель управления</h1>{msg_html}<div class='grid'>{cards}</div>"
     )
-    return head("Панель — Ferma", token, demo=demo) + body + foot()
+    return head("Панель — Ferma", demo=demo) + body + foot()
 
 
 @app.get("/add", response_class=HTMLResponse)
-async def add_channel_form(token: str | None = Query(None)):
-    check_auth(token)
-    demo = is_demo(token)
+async def add_channel_form(request: Request):
+    session = get_current_user(request)
+    demo = session.get("demo", False)
     disabled = " disabled" if demo else ""
     body = f"""
     <h1>Добавить канал</h1>
-    <form action='/api/channel/create?token={token}' method='post'{' class="demo-disabled"' if demo else ""}>
+    <form action='/api/channel/create' method='post'{' class="demo-disabled"' if demo else ""}>
         <div class='form-group'><label>Название (папка)</label><input type='text' name='name' placeholder='например: tech' required{disabled}></div>
         <div class='form-group'><label>Тип канала</label>
             <select name='channel_type' id='channel_type' onchange='toggleType()' required{disabled}>
@@ -251,14 +322,14 @@ async def add_channel_form(token: str | None = Query(None)):
             <div class='form-group'><label>CPA каждые N постов</label><input type='number' name='cpa_insert_every' value='3'{disabled}></div>
             <div class='form-group'><label>Запустить после создания</label><input type='checkbox' name='start_now' value='1' style='width:auto;margin-top:8px' checked{disabled}></div>
         </div>
-        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'{disabled}>Создать</button> <a href='/?token={token}' class='btn btn-warning'>Отмена</a></p>
+        <p style='margin-top:16px'><button type='submit' class='btn btn-primary'{disabled}>Создать</button> <a href='/' class='btn btn-warning'>Отмена</a></p>
     </form>"""
-    return head("Добавить канал — Ferma", token, demo=demo) + body + foot()
+    return head("Добавить канал — Ferma", demo=demo) + body + foot()
 
 
 @app.post("/api/channel/create")
 async def api_create_channel(
-    token: str | None = Query(None),
+    request: Request,
     name: str = Form(...),
     channel_type: str = Form("normal"),
     bot_token: str = Form(...),
@@ -279,14 +350,14 @@ async def api_create_channel(
     ru_source_channels: str = Form(""),
     reddit_subreddits: str = Form(""),
 ):
-    check_auth(token)
-    if is_demo(token):
+    session = get_current_user(request)
+    if session.get("demo"):
         raise HTTPException(403, "Demo mode: actions disabled")
 
     name = name.strip().lower().replace(" ", "_")
     if not CHANNEL_NAME_RE.match(name):
         return RedirectResponse(
-            f"/?token={token}&msg=Ошибка%3A+недопустимое+имя+канала+%27{name}%27",
+            f"/?msg=Ошибка%3A+недопустимое+имя+канала+%27{name}%27",
             302,
         )
     ch_dir = os.path.join(CHANNELS_DIR, name)
@@ -294,14 +365,14 @@ async def api_create_channel(
 
     if os.path.exists(ch_dir):
         return RedirectResponse(
-            f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+уже+существует",
+            f"/?msg=Ошибка%3A+канал+%27{name}%27+уже+существует",
             302,
         )
 
     bot_username = get_bot_name(bot_token)
     if bot_username == "?":
         return RedirectResponse(
-            f"/?token={token}&msg=Ошибка%3A+неверный+BOT_TOKEN+для+%27{name}%27",
+            f"/?msg=Ошибка%3A+неверный+BOT_TOKEN+для+%27{name}%27",
             302,
         )
 
@@ -394,42 +465,42 @@ REQUIRE_MEDIA={"true" if require_media == "1" else "false"}
         _start_screen(name)
 
     return RedirectResponse(
-        f"/?token={token}&msg=Канал+%27{name}%27+создан+%28%40{target}%29", 302
+        f"/?msg=Канал+%27{name}%27+создан+%28%40{target}%29", 302
     )
 
 
 @app.post("/api/channel/{name}/start")
-async def api_start_channel(name: str, token: str | None = Query(None)):
-    check_auth(token)
-    if is_demo(token):
+async def api_start_channel(request: Request, name: str):
+    session = get_current_user(request)
+    if session.get("demo"):
         raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     _start_screen(name)
-    return RedirectResponse(f"/?token={token}&msg={name}+запущен", 302)
+    return RedirectResponse(f"/?msg={name}+запущен", 302)
 
 
 @app.post("/api/channel/{name}/stop")
-async def api_stop_channel(name: str, token: str | None = Query(None)):
-    check_auth(token)
-    if is_demo(token):
+async def api_stop_channel(request: Request, name: str):
+    session = get_current_user(request)
+    if session.get("demo"):
         raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     subprocess.run(
         ["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5
     )
-    return RedirectResponse(f"/?token={token}&msg={name}+остановлен", 302)
+    return RedirectResponse(f"/?msg={name}+остановлен", 302)
 
 
 @app.post("/api/channel/{name}/delete")
-async def api_delete_channel(name: str, token: str | None = Query(None)):
-    check_auth(token)
-    if is_demo(token):
+async def api_delete_channel(request: Request, name: str):
+    session = get_current_user(request)
+    if session.get("demo"):
         raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     ch_dir = os.path.join(CHANNELS_DIR, name)
     if not os.path.exists(ch_dir):
         return RedirectResponse(
-            f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302
+            f"/?msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302
         )
     subprocess.run(
         ["screen", "-S", name, "-X", "quit"], capture_output=True, timeout=5
@@ -438,14 +509,14 @@ async def api_delete_channel(name: str, token: str | None = Query(None)):
 
     shutil.rmtree(ch_dir)
     return RedirectResponse(
-        f"/?token={token}&msg=Канал+%27{name}%27+удален", 302
+        f"/?msg=Канал+%27{name}%27+удален", 302
     )
 
 
 @app.get("/channel/{name}", response_class=HTMLResponse)
-async def channel_detail(name: str, token: str | None = Query(None)):
-    check_auth(token)
-    demo = is_demo(token)
+async def channel_detail(request: Request, name: str):
+    session = get_current_user(request)
+    demo = session.get("demo", False)
     validate_channel_name(name)
     analytics = FarmAnalytics()
     s = analytics.channel_stats(name)
@@ -526,33 +597,33 @@ async def channel_detail(name: str, token: str | None = Query(None)):
         <div class='card'>
             <h2>Последние посты</h2>
             {posts}
-            <p style='margin-top:10px'><a href='/logs/{name}?token={token}'>Логи</a></p>
+            <p style='margin-top:10px'><a href='/logs/{name}'>Логи</a></p>
         </div>
     </div>
     {sources_html}
     <div class='card'>
         <h2>Действия</h2>
         <div style='margin-top:8px;display:flex;flex-wrap:wrap;gap:8px'{' class="demo-disabled"' if demo else ""}>
-            <a href='/channel/{name}/edit?token={token}' class='btn btn-primary btn-sm'>⚙ Настройки</a>
-            <form action='/api/channel/{name}/start?token={token}' method='post'>
+            <a href='/channel/{name}/edit' class='btn btn-primary btn-sm'>⚙ Настройки</a>
+            <form action='/api/channel/{name}/start' method='post'>
                 <button type='submit' class='btn btn-primary btn-sm' {"disabled" if running or demo else ""}>▶ Запустить</button>
             </form>
-            <form action='/api/channel/{name}/stop?token={token}' method='post'>
+            <form action='/api/channel/{name}/stop' method='post'>
                 <button type='submit' class='btn btn-warning btn-sm' {"disabled" if not running or demo else ""}>⏹ Остановить</button>
             </form>
-            <form action='/api/channel/{name}/delete?token={token}' method='post' onsubmit='return confirm("Удалить {name} и все данные?")'>
+            <form action='/api/channel/{name}/delete' method='post' onsubmit='return confirm("Удалить {name} и все данные?")'>
                 <button type='submit' class='btn btn-danger btn-sm'{"disabled" if demo else ""}>🗑 Удалить</button>
             </form>
         </div>
     </div>
-    <p><a href='/?token={token}'>← Назад</a></p>"""
-    return head(f"{name} — Ferma", token, demo=demo) + body + foot()
+    <p><a href='/'>← Назад</a></p>"""
+    return head(f"{name} — Ferma", demo=demo) + body + foot()
 
 
 @app.get("/channels", response_class=HTMLResponse)
-async def channels_list(token: str | None = Query(None)):
-    check_auth(token)
-    demo = is_demo(token)
+async def channels_list(request: Request):
+    session = get_current_user(request)
+    demo = session.get("demo", False)
     analytics = FarmAnalytics()
     statuses = analytics.farm_status()
     rows = ""
@@ -568,15 +639,15 @@ async def channels_list(token: str | None = Query(None)):
         )
         action_cls = " class='demo-disabled'" if demo else ""
         rows += f"""<tr>
-            <td><a href='/channel/{s["name"]}?token={token}'>{s["name"]}</a></td>
+            <td><a href='/channel/{s["name"]}'>{s["name"]}</a></td>
             <td>@{s["target"]}</td>
             <td>{status_tag} {"Работает" if running else "Остановлен"}</td>
             <td>{s["subscribers"]}</td>
             <td>{s["donors"]}</td>
             <td>{s["db"]["total"]}/{s["db"]["published"]}/{s["db"]["skipped"]}</td>
             <td{action_cls}>
-                <a href='/channel/{s["name"]}?token={token}' class='btn btn-primary btn-sm'>Управление</a>
-                <a href='/channel/{s["name"]}/edit?token={token}' class='btn btn-warning btn-sm'>Настройки</a>
+                <a href='/channel/{s["name"]}' class='btn btn-primary btn-sm'>Управление</a>
+                <a href='/channel/{s["name"]}/edit' class='btn btn-warning btn-sm'>Настройки</a>
             </td>
         </tr>"""
     body = f"""
@@ -585,14 +656,14 @@ async def channels_list(token: str | None = Query(None)):
         <tr><th>Название</th><th>Канал</th><th>Статус</th><th>Подп</th><th>Доноры</th><th>БД (В/О/П)</th><th>Действия</th></tr>
         {rows if rows else "<tr><td colspan='7' style='text-align:center;color:#8b949e'>Нет каналов</td></tr>"}
     </table>
-    <p><a href='/?token={token}'>← Назад</a></p>"""
-    return head("Каналы — Ferma", token, demo=demo) + body + foot()
+    <p><a href='/'>← Назад</a></p>"""
+    return head("Каналы — Ferma", demo=demo) + body + foot()
 
 
 @app.get("/channel/{name}/edit", response_class=HTMLResponse)
-async def edit_channel_form(name: str, token: str | None = Query(None)):
-    check_auth(token)
-    demo = is_demo(token)
+async def edit_channel_form(request: Request, name: str):
+    session = get_current_user(request)
+    demo = session.get("demo", False)
     validate_channel_name(name)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
@@ -617,7 +688,7 @@ async def edit_channel_form(name: str, token: str | None = Query(None)):
     <h1>Настройки: {name} <span style='font-size:14px;color:#8b949e'>{
         "⚡️ Lightning" if is_lightning else "📰 Reddit VK" if is_redditvk else "📰 Normal"
     }</span></h1>
-    <form action='/api/channel/{name}/update?token={token}' method='post'{
+    <form action='/api/channel/{name}/update' method='post'{
         ' class="demo-disabled"' if demo else ""
     }>
         <input type='hidden' name='channel_type' value='{channel_type}'>
@@ -717,17 +788,15 @@ async def edit_channel_form(name: str, token: str | None = Query(None)):
     }> Перезапустить после сохранения</label></div>
         <p style='margin-top:16px'><button type='submit' class='btn btn-primary'{
         disabled
-    }>Сохранить</button> <a href='/channel/{name}?token={
-        token
-    }' class='btn btn-warning'>Отмена</a></p>
+    }>Сохранить</button> <a href='/channel/{name}' class='btn btn-warning'>Отмена</a></p>
     </form>"""
-    return head(f"Настройки {name} — Ferma", token, demo=demo) + body + foot()
+    return head(f"Настройки {name} — Ferma", demo=demo) + body + foot()
 
 
 @app.post("/api/channel/{name}/update")
 async def api_update_channel(
+    request: Request,
     name: str,
-    token: str | None = Query(None),
     channel_type: str = Form("normal"),
     bot_token: str = Form(...),
     target_channel: str = Form(...),
@@ -751,14 +820,14 @@ async def api_update_channel(
     vk_token: str = Form(""),
     vk_group_id: str = Form(""),
 ):
-    check_auth(token)
-    if is_demo(token):
+    session = get_current_user(request)
+    if session.get("demo"):
         raise HTTPException(403, "Demo mode: actions disabled")
     validate_channel_name(name)
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return RedirectResponse(
-            f"/?token={token}&msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302
+            f"/?msg=Ошибка%3A+канал+%27{name}%27+не+найден", 302
         )
     target = target_channel.strip().lstrip("@")
     sources = ",".join(
@@ -849,14 +918,14 @@ REQUIRE_MEDIA={"true" if require_media == "1" else "false"}
             timeout=5,
         )
         _start_screen(name)
-    return RedirectResponse(f"/channel/{name}?token={token}", 302)
+    return RedirectResponse(f"/channel/{name}", 302)
 
 
 @app.get("/logs/{name}", response_class=HTMLResponse)
 async def view_logs(
-    name: str, lines: int = 50, token: str | None = Query(None)
+    request: Request, name: str, lines: int = 50
 ):
-    check_auth(token)
+    get_current_user(request)
     validate_channel_name(name)
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
     if not os.path.exists(log_path):
@@ -866,16 +935,16 @@ async def view_logs(
     with open(log_path, "r", encoding="utf-8", errors="replace") as f:
         all_lines = f.readlines()
         tail = all_lines[-lines:]
-    body = f"<h1>Логи: {name}</h1><p><a href='/channel/{name}?token={token}'>← Назад к каналу</a></p><pre>{''.join(tail)}</pre>"
-    return head(f"Логи: {name} — Ferma", token) + body + foot()
+    body = f"<h1>Логи: {name}</h1><p><a href='/channel/{name}'>← Назад к каналу</a></p><pre>{''.join(tail)}</pre>"
+    return head(f"Логи: {name} — Ferma") + body + foot()
 
 
 @app.get("/filters", response_class=HTMLResponse)
 async def filters_page(
-    token: str | None = Query(None), msg: str | None = None
+    request: Request, msg: str | None = None
 ):
-    check_auth(token)
-    demo = is_demo(token)
+    session = get_current_user(request)
+    demo = session.get("demo", False)
     from core.filter.manage import load_filters
 
     f = load_filters()
@@ -909,7 +978,7 @@ async def filters_page(
             rows = (
                 "".join(
                     f"<tr><td>{item}</td><td>"
-                    f"<form action='/api/filters/remove?token={token}' method='post' style='display:inline'>"
+                    f"<form action='/api/filters/remove' method='post' style='display:inline'>"
                     f"<input type='hidden' name='group' value='{key}'>"
                     f"<input type='hidden' name='value' value='{item}'>"
                     f"<button type='submit' class='btn btn-danger btn-sm'>X</button></form></td></tr>"
@@ -921,7 +990,7 @@ async def filters_page(
         add_form = ""
         if not demo:
             add_form = f"""
-            <form action='/api/filters/add?token={token}' method='post' style='margin-top:8px;display:flex;gap:8px'>
+            <form action='/api/filters/add' method='post' style='margin-top:8px;display:flex;gap:8px'>
                 <input type='hidden' name='group' value='{key}'>
                 <input type='text' name='value' placeholder='новая фраза...' style='margin-bottom:0;flex:1' required>
                 <button type='submit' class='btn btn-primary btn-sm'>Добавить</button>
@@ -932,18 +1001,18 @@ async def filters_page(
             <table><tr><th>Фраза</th><th style='width:50px'></th></tr>{rows}</table>
             {add_form}
         </div>"""
-    body = f"<h1>Управление фильтрами</h1>{msg_html}{sections}<p><a href='/?token={token}'>← Назад</a></p>"
-    return head("Фильтры — Ferma", token, demo=demo) + body + foot()
+    body = f"<h1>Управление фильтрами</h1>{msg_html}{sections}<p><a href='/'>← Назад</a></p>"
+    return head("Фильтры — Ferma", demo=demo) + body + foot()
 
 
 @app.post("/api/filters/add")
 async def api_filter_add(
-    token: str | None = Query(None),
+    request: Request,
     group: str = Form(...),
     value: str = Form(...),
 ):
-    check_auth(token)
-    if is_demo(token):
+    session = get_current_user(request)
+    if session.get("demo"):
         raise HTTPException(403, "Demo mode: actions disabled")
     from core.filter.manage import load_filters, save_filters
 
@@ -955,18 +1024,18 @@ async def api_filter_add(
         f[group].append(v)
         save_filters(f)
     return RedirectResponse(
-        f"/filters?token={token}&msg=%27{v}%27+added+to+{group}", 302
+        f"/filters?msg=%27{v}%27+added+to+{group}", 302
     )
 
 
 @app.post("/api/filters/remove")
 async def api_filter_remove(
-    token: str | None = Query(None),
+    request: Request,
     group: str = Form(...),
     value: str = Form(...),
 ):
-    check_auth(token)
-    if is_demo(token):
+    session = get_current_user(request)
+    if session.get("demo"):
         raise HTTPException(403, "Demo mode: actions disabled")
     from core.filter.manage import load_filters, save_filters
 
@@ -975,7 +1044,7 @@ async def api_filter_remove(
         f[group] = [x for x in f[group] if x != value.strip().lower()]
         save_filters(f)
     return RedirectResponse(
-        f"/filters?token={token}&msg=%27{value}%27+removed+from+{group}", 302
+        f"/filters?msg=%27{value}%27+removed+from+{group}", 302
     )
 
 
@@ -1023,7 +1092,7 @@ def _start_screen(name: str):
 def main():
     port = int(os.environ.get("ADMIN_PORT", "8080"))
     host = os.environ.get("ADMIN_HOST", "0.0.0.0")
-    print(f"Admin panel: http://{host}:{port}/?token={AUTH_TOKEN}")
+    print(f"Admin panel: http://{host}:{port}/login")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
