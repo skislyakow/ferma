@@ -17,6 +17,11 @@ sys.path.insert(
     ),
 )
 
+from dotenv import load_dotenv
+
+_admin_env = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(_admin_env, override=False)
+
 from core.analytics import FarmAnalytics  # noqa: E402
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
