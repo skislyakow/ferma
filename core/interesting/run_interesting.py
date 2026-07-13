@@ -256,6 +256,10 @@ def download_reddit_video(video_url, filename):
 
         return None
     except Exception as e:
+        for f in [video_file, audio_file, merged]:
+            if f and os.path.exists(f):
+                try: os.remove(f)
+                except OSError: pass
         print(f"[Interesting] Video download failed: {e}")
         return None
 

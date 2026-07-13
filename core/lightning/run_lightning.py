@@ -73,8 +73,16 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
         vk_text = f"\U0001f4f8 {vk_text}\n\nБольше новостей и кадров дня — в нашем Telegram-канале https://t.me/{cfg['TARGET_CHANNEL'].lstrip('@')}"
         vk.post_to_wall(message=vk_text, attachment=attach)
         posted.add(post_key)
-        with open(tracker_path, "w") as f:
-            json.dump(list(posted), f)
+        import tempfile
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(tracker_path), suffix=".tmp")
+        try:
+            with os.fdopen(tmp_fd, "w") as f:
+                json.dump(list(posted), f)
+            os.replace(tmp_path, tracker_path)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
         print(f"[VK] Crossposted: {post_text[:50]}...")
     except Exception as e:
         print(f"[VK] Failed to crosspost: {e}")
@@ -273,8 +281,14 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
         print(f"[RE:POST] Published: {headline[:50]}")
         if vk_copy and os.path.exists(media_path):
             _crosspost_to_vk(media_path, post, cfg, media_type=media_type)
-        if vk_copy:
-            _vk_cleanup(vk_copy)
+
+    if vk_copy:
+        _vk_cleanup(vk_copy)
+    if media_path and os.path.exists(media_path):
+        try:
+            os.remove(media_path)
+        except OSError:
+            pass
     return success
 
 
@@ -441,8 +455,14 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 print(f"[RU] Published from {source_channel}: {text[:50]}...")
                 if vk_copy and os.path.exists(m_path):
                     _crosspost_to_vk(m_path, post_text, cfg, media_type=m_type)
-                if vk_copy:
-                    _vk_cleanup(vk_copy)
+
+            if vk_copy:
+                _vk_cleanup(vk_copy)
+            if m_path and os.path.exists(m_path):
+                try:
+                    os.remove(m_path)
+                except OSError:
+                    pass
 
         except Exception as e:
             print(f"[RU] Error: {e}")
@@ -540,7 +560,11 @@ def _download_reddit_video(video_url, filename):
 
         return None
     except Exception as e:
-        print(f"[REDDIT] Video download failed: {e}")
+        for f in [video_file, audio_file, merged]:
+            if f and os.path.exists(f):
+                try: os.remove(f)
+                except OSError: pass
+        print(f"[Reddit Poll] Video download failed: {e}")
         return None
 
 
@@ -737,8 +761,9 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         print(f"[REDDIT] Published: {headline[:50]}")
                         if vk_copy and os.path.exists(media_path):
                             _crosspost_to_vk(media_path, post_text, cfg, media_type=media_type)
-                        if vk_copy:
-                            _vk_cleanup(vk_copy)
+
+                    if vk_copy:
+                        _vk_cleanup(vk_copy)
 
                 last_ts[sub] = newest_ts
 
