@@ -5,7 +5,7 @@ import subprocess
 import hashlib
 import secrets
 
-from fastapi import FastAPI, Query, HTTPException, Form, Request
+from fastapi import FastAPI, HTTPException, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
@@ -68,7 +68,9 @@ def mask_value(key: str, value: str, demo: bool) -> str:
 
 
 app = FastAPI(title="Ferma Admin")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie="ferma_session")
+app.add_middleware(
+    SessionMiddleware, secret_key=SECRET_KEY, session_cookie="ferma_session"
+)
 
 CSS = """
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -206,7 +208,9 @@ async def login_page(request: Request, msg: str | None = None):
 
 
 @app.post("/login")
-async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+async def login_submit(
+    request: Request, username: str = Form(...), password: str = Form(...)
+):
     if username == ADMIN_USER and verify_password(password):
         request.session["user"] = username
         request.session["demo"] = False
@@ -514,9 +518,7 @@ async def api_delete_channel(request: Request, name: str):
     import shutil
 
     shutil.rmtree(ch_dir)
-    return RedirectResponse(
-        f"/?msg=Канал+%27{name}%27+удален", 302
-    )
+    return RedirectResponse(f"/?msg=Канал+%27{name}%27+удален", 302)
 
 
 @app.get("/channel/{name}", response_class=HTMLResponse)
@@ -533,11 +535,18 @@ async def channel_detail(request: Request, name: str):
         posts += f"<div class='stat'><span class='label'>#{p['id']} {p['date'][:16]}</span><span class='value'>👁 {p['views']} 💬 {p['reactions']}</span></div>"
     if not posts and s.get("vk_posts"):
         import datetime
+
         for p in s["vk_posts"]:
             icon = "✅" if p["ok"] else "❌"
             tag = f"[{p['type']}]"
-            dt = datetime.datetime.fromtimestamp(p["date"]).strftime("%d.%m %H:%M") if p.get("date") else ""
-            views = f"\U0001F441 {p.get('views', 0)}" if p.get("views") else ""
+            dt = (
+                datetime.datetime.fromtimestamp(p["date"]).strftime(
+                    "%d.%m %H:%M"
+                )
+                if p.get("date")
+                else ""
+            )
+            views = f"\U0001f441 {p.get('views', 0)}" if p.get("views") else ""
             posts += f"<div class='stat'><span class='label'>{icon} {tag} {p['title'][:60]}</span><span class='value'>{dt} {views}</span></div>"
     if not posts:
         posts = "<div class='stat'><span class='label'>Пока нет постов</span></div>"
@@ -692,7 +701,11 @@ async def edit_channel_form(request: Request, name: str):
     disabled = " disabled" if demo else ""
     body = f"""
     <h1>Настройки: {name} <span style='font-size:14px;color:#8b949e'>{
-        "⚡️ Lightning" if is_lightning else "📰 Reddit VK" if is_redditvk else "📰 Normal"
+        "⚡️ Lightning"
+        if is_lightning
+        else "📰 Reddit VK"
+        if is_redditvk
+        else "📰 Normal"
     }</span></h1>
     <form action='/api/channel/{name}/update' method='post'{
         ' class="demo-disabled"' if demo else ""
@@ -707,11 +720,7 @@ async def edit_channel_form(request: Request, name: str):
         <div class='form-group'><label>Доноры (через запятую)</label><input type='text' name='source_channels' value='{
         v("SOURCE_CHANNELS")
     }'{" required" if not is_redditvk else ""}{disabled}></div>
-        {
-        ""
-        if channel_type == "normal"
-        else ''
-    }
+        {"" if channel_type == "normal" else ""}
         {
         ""
         if not is_lightning
@@ -794,7 +803,9 @@ async def edit_channel_form(request: Request, name: str):
     }> Перезапустить после сохранения</label></div>
         <p style='margin-top:16px'><button type='submit' class='btn btn-primary'{
         disabled
-    }>Сохранить</button> <a href='/channel/{name}' class='btn btn-warning'>Отмена</a></p>
+    }>Сохранить</button> <a href='/channel/{
+        name
+    }' class='btn btn-warning'>Отмена</a></p>
     </form>"""
     return head(f"Настройки {name} — Ferma", demo=demo) + body + foot()
 
@@ -928,9 +939,7 @@ REQUIRE_MEDIA={"true" if require_media == "1" else "false"}
 
 
 @app.get("/logs/{name}", response_class=HTMLResponse)
-async def view_logs(
-    request: Request, name: str, lines: int = 50
-):
+async def view_logs(request: Request, name: str, lines: int = 50):
     get_current_user(request)
     validate_channel_name(name)
     log_path = os.path.join(CHANNELS_DIR, name, "bot.log")
@@ -946,9 +955,7 @@ async def view_logs(
 
 
 @app.get("/filters", response_class=HTMLResponse)
-async def filters_page(
-    request: Request, msg: str | None = None
-):
+async def filters_page(request: Request, msg: str | None = None):
     session = get_current_user(request)
     demo = session.get("demo", False)
     from core.filter.manage import load_filters
@@ -1029,9 +1036,7 @@ async def api_filter_add(
     if v and v not in f[group]:
         f[group].append(v)
         save_filters(f)
-    return RedirectResponse(
-        f"/filters?msg=%27{v}%27+added+to+{group}", 302
-    )
+    return RedirectResponse(f"/filters?msg=%27{v}%27+added+to+{group}", 302)
 
 
 @app.post("/api/filters/remove")
