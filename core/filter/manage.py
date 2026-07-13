@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 
 
 FILTERS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "filters.json")
@@ -140,11 +141,21 @@ DEFAULT_FILTERS = {
 
 def load_filters():
     if os.path.exists(FILTERS_PATH):
-        with open(FILTERS_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(FILTERS_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            print(f"[FILTERS] Corrupt filters.json, falling back to defaults")
     return DEFAULT_FILTERS.copy()
 
 
 def save_filters(filters: dict):
-    with open(FILTERS_PATH, "w", encoding="utf-8") as f:
-        json.dump(filters, f, ensure_ascii=False, indent=2)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(FILTERS_PATH), suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            json.dump(filters, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, FILTERS_PATH)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
