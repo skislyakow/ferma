@@ -37,6 +37,7 @@ BREAKING_KEYWORDS = [
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPOST_BANNER = os.path.join(PROJECT_ROOT, "repost2.png")
 SESSION_FILE = "repost.session"
+MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
 VK_TRACKER_PATH = os.path.join(PROJECT_ROOT, "channels", "repost", "vk_posted.json")
 
 
@@ -515,13 +516,13 @@ def _download_reddit_video(video_url, filename):
                 best_audio = max(audio_rep, key=lambda x: int(x[0]))
                 audio_base = best_audio[1]
 
-        os.makedirs("media", exist_ok=True)
-        merged = os.path.join("media", f"{filename}.mp4")
+        os.makedirs(MEDIA_DIR, exist_ok=True)
+        merged = os.path.join(MEDIA_DIR, f"{filename}.mp4")
 
         url = f"https://v.redd.it/{video_id}/{video_base}"
         vr = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
         vr.raise_for_status()
-        video_file = os.path.join("media", f"{filename}_video.mp4")
+        video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
         with open(video_file, "wb") as f:
             for chunk in vr.iter_content(8192):
                 f.write(chunk)
@@ -531,7 +532,7 @@ def _download_reddit_video(video_url, filename):
             url = f"https://v.redd.it/{video_id}/{audio_base}"
             ar = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
             ar.raise_for_status()
-            audio_file = os.path.join("media", f"{filename}_audio.mp4")
+            audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
             with open(audio_file, "wb") as f:
                 for chunk in ar.iter_content(8192):
                     f.write(chunk)
@@ -642,10 +643,10 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                                     import requests as _req
                                     r = _req.get(img_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
                                     if r.status_code == 200:
-                                        os.makedirs("media", exist_ok=True)
+                                        os.makedirs(MEDIA_DIR, exist_ok=True)
                                         ext = img_url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
                                         fname = f"reddit_{pid}.{ext}"
-                                        fpath = os.path.join("media", fname)
+                                        fpath = os.path.join(MEDIA_DIR, fname)
                                         with open(fpath, "wb") as f:
                                             f.write(r.content)
                                         return fpath
@@ -813,9 +814,9 @@ async def main(env_path: str):
 
         if msg.photo:
             try:
-                os.makedirs("media", exist_ok=True)
+                os.makedirs(MEDIA_DIR, exist_ok=True)
                 fname = f"repost_{source_msg_id}.jpg"
-                path = await msg.download_media(file=f"media/{fname}")
+                path = await msg.download_media(file=os.path.join(MEDIA_DIR, fname))
                 if path and os.path.exists(path):
                     media_path = path
             except Exception as e:
