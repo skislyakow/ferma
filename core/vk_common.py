@@ -107,6 +107,7 @@ def fetch_reddit_images(post_url, name="VK"):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
         if r.status_code != 200:
+            print(f"[{name}] Reddit JSON returned {r.status_code}")
             return []
         data = r.json()
         post_data = data[0]["data"]["children"][0]["data"]
