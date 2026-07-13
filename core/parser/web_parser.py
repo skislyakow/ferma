@@ -1,6 +1,7 @@
 import re
 import requests
 import os
+import zlib
 from html import unescape
 
 from core.db.database import Database
@@ -94,7 +95,7 @@ class WebParser:
                 try:
                     msg_id = int(msg_id_str.split("/")[-1])
                 except (ValueError, IndexError):
-                    msg_id = abs(hash(msg_id_str))
+                    msg_id = zlib.crc32(msg_id_str.encode()) & 0x7FFFFFFF
                 if msg_id in seen_ids:
                     continue
                 seen_ids.add(msg_id)
