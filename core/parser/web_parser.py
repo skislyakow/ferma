@@ -175,8 +175,9 @@ class WebParser:
                     reactions_count=0,
                     has_media=media_path is not None,
                     media_path=media_path,
-                    image_url=msg["video_url"] or msg["image_url"],
+                    image_url=msg["image_url"],
                     media_type=media_type,
+                    video_url=msg["video_url"],
                 )
                 new_count += 1
 

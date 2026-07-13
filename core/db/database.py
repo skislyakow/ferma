@@ -48,6 +48,11 @@ class Database:
                 self._conn.commit()
             except sqlite3.OperationalError:
                 pass
+        try:
+            self._conn.execute("ALTER TABLE posts ADD COLUMN video_url TEXT")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     @staticmethod
     def make_text_hash(text: str) -> str:
@@ -79,13 +84,13 @@ class Database:
         ).fetchone()
         return row is not None
 
-    def save_post(self, source_channel, source_message_id, text, views, reactions_count, has_media, media_path=None, image_url=None, media_type="photo", published=0):
+    def save_post(self, source_channel, source_message_id, text, views, reactions_count, has_media, media_path=None, image_url=None, media_type="photo", published=0, video_url=None):
         text_hash = self.make_text_hash(text)
         self._conn.execute(
             """INSERT OR IGNORE INTO posts
-            (source_channel, source_message_id, text, text_hash, views, reactions_count, has_media, media_path, image_url, media_type, published)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (source_channel, source_message_id, text, text_hash, views, reactions_count, int(has_media), media_path, image_url, media_type, published),
+            (source_channel, source_message_id, text, text_hash, views, reactions_count, has_media, media_path, image_url, media_type, published, video_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (source_channel, source_message_id, text, text_hash, views, reactions_count, int(has_media), media_path, image_url, media_type, published, video_url),
         )
         self._conn.commit()
 
