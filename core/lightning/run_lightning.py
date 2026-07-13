@@ -13,6 +13,7 @@ import zlib
 import re
 import asyncio
 import shutil
+import traceback
 
 from dotenv import dotenv_values
 
@@ -480,7 +481,6 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
 
         except Exception as e:
             print(f"[RU] Error: {e}")
-            import traceback
             traceback.print_exc()
 
         await asyncio.sleep(300)
@@ -783,7 +783,6 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
             except Exception as e:
                 print(f"[REDDIT] Error r/{sub}: {e}")
-                import traceback
                 traceback.print_exc()
 
         interval = int(cfg.get("REDDIT_INTERVAL", 300))

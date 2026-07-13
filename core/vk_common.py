@@ -5,6 +5,7 @@ import json
 import re
 import asyncio
 import tempfile
+import traceback
 from html import unescape
 
 
@@ -382,7 +383,6 @@ async def run_cycle(env_path, *, name, format_post, media_dir,
 
         except Exception as e:
             print(f"[{name}] Error: {e}")
-            import traceback
             traceback.print_exc()
 
         await asyncio.sleep(interval)

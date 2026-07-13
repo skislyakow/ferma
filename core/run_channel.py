@@ -4,6 +4,7 @@
 """
 import os
 import sys
+import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -103,7 +104,6 @@ if __name__ == "__main__":
                 run_channel(env_path, once=True)
             except Exception as e:
                 print(f"[ERROR] {e}")
-                import traceback
                 traceback.print_exc()
             print(f"Sleeping {interval}s...")
             time.sleep(interval)
