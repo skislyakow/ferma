@@ -3,6 +3,7 @@ import json
 import requests
 import sqlite3
 from datetime import datetime
+from typing import Any
 
 
 class FarmAnalytics:
@@ -66,32 +67,32 @@ class FarmAnalytics:
         from dotenv import dotenv_values
 
         cfg = dotenv_values(env_path)
-        token = cfg.get("BOT_TOKEN", "")
-        target = cfg.get("TARGET_CHANNEL", "").lstrip("@")
-        chan_type = cfg.get("CHANNEL_TYPE", "normal")
-        vk_token = cfg.get("VK_TOKEN", "")
-        vk_group_id = cfg.get("VK_GROUP_ID", "")
+        token = cfg.get("BOT_TOKEN") or ""
+        target = (cfg.get("TARGET_CHANNEL") or "").lstrip("@")
+        chan_type = cfg.get("CHANNEL_TYPE") or "normal"
+        vk_token = cfg.get("VK_TOKEN") or ""
+        vk_group_id = cfg.get("VK_GROUP_ID") or ""
 
         is_vk_only = bool(vk_token and vk_group_id and not token)
         if is_vk_only:
             chan_type = "vk"
 
         source_channels_raw = self._parse_channel_list(
-            cfg.get("SOURCE_CHANNELS", "")
+            cfg.get("SOURCE_CHANNELS") or ""
         )
         rss_feeds = [
-            x.strip() for x in cfg.get("RSS_FEEDS", "").split(",") if x.strip()
+            x.strip() for x in (cfg.get("RSS_FEEDS") or "").split(",") if x.strip()
         ]
         ru_sources_raw = self._parse_channel_list(
-            cfg.get("RU_SOURCE_CHANNELS", "")
+            cfg.get("RU_SOURCE_CHANNELS") or ""
         )
         reddit_subreddits = [
             x.strip()
-            for x in cfg.get("REDDIT_SUBREDDITS", "").split(",")
+            for x in (cfg.get("REDDIT_SUBREDDITS") or "").split(",")
             if x.strip()
         ]
         if not reddit_subreddits:
-            single = cfg.get("REDDIT_SUBREDDIT", "").strip()
+            single = (cfg.get("REDDIT_SUBREDDIT") or "").strip()
             if single:
                 reddit_subreddits = [single]
 
@@ -111,7 +112,7 @@ class FarmAnalytics:
                 name_resolved = ch
             ru_source_channels.append({"username": ch, "title": name_resolved})
 
-        result = {
+        result: dict[str, Any] = {
             "name": name,
             "target": target or f"VK {vk_group_id}",
             "type": chan_type,
@@ -177,7 +178,7 @@ class FarmAnalytics:
                             "title": post.get("text", "")[:80],
                             "type": post_type,
                             "views": post.get("views", {}).get("count", 0),
-                            "ok": True,
+                            "ok": 1,
                         })
             except Exception:
                 pass

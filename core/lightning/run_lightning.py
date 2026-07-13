@@ -863,14 +863,16 @@ async def main(env_path: str):
     async def run_telegram():
         await collector.start(cfg["SOURCE_CHANNELS"])
 
+    env_vals = dotenv_values(env_path)
+
     # Parse RSS feeds from .env
-    rss_feeds = [x.strip() for x in dotenv_values(env_path).get("RSS_FEEDS", "").split(",") if x.strip()]
+    rss_feeds = [x.strip() for x in (env_vals.get("RSS_FEEDS") or "").split(",") if x.strip()]
 
     # Parse Russian source channels from .env
-    ru_channels = [x.strip() for x in dotenv_values(env_path).get("RU_SOURCE_CHANNELS", "").split(",") if x.strip()]
+    ru_channels = [x.strip() for x in (env_vals.get("RU_SOURCE_CHANNELS") or "").split(",") if x.strip()]
 
     # Parse Reddit subreddits from .env
-    reddit_subs = [x.strip() for x in dotenv_values(env_path).get("REDDIT_SUBREDDITS", "").split(",") if x.strip()]
+    reddit_subs = [x.strip() for x in (env_vals.get("REDDIT_SUBREDDITS") or "").split(",") if x.strip()]
 
     tasks.append(asyncio.create_task(run_telegram()))
     if rss_feeds:

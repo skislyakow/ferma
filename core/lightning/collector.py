@@ -66,9 +66,10 @@ class LightningCollector:
 
             for ch in channels:
                 try:
-                    entity = await self.client.get_entity(ch)  # type: ignore[union-attr]
+                    assert self.client is not None
+                    entity = await self.client.get_entity(ch)
                     last_id = self._last_msg_ids.get(ch, 0)
-                    messages = await self.client.get_messages(entity, limit=5)  # type: ignore[union-attr]
+                    messages = await self.client.get_messages(entity, limit=5)
 
                     for msg in reversed(messages):  # type: ignore[reportCallIssue]
                         if msg.id <= last_id:

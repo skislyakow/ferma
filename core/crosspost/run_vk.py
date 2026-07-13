@@ -39,12 +39,12 @@ async def main(env_path: str):
     from telethon import TelegramClient
 
     env = dotenv_values(env_path)
-    bot_token = env.get("BOT_TOKEN", "")
-    target_channel = env.get("TARGET_CHANNEL", "")
-    vk_token = env.get("VK_TOKEN", "")
-    vk_group_id = env.get("VK_GROUP_ID", "")
-    api_id = int(env.get("TELEGRAM_API_ID", "0"))
-    api_hash = env.get("TELEGRAM_API_HASH", "")
+    bot_token = env.get("BOT_TOKEN") or ""
+    target_channel = env.get("TARGET_CHANNEL") or ""
+    vk_token = env.get("VK_TOKEN") or ""
+    vk_group_id = env.get("VK_GROUP_ID") or ""
+    api_id = int(env.get("TELEGRAM_API_ID") or "0")
+    api_hash = env.get("TELEGRAM_API_HASH") or ""
 
     if not all([bot_token, target_channel, vk_token, vk_group_id]):
         print("[VK] Missing config: BOT_TOKEN, TARGET_CHANNEL, VK_TOKEN, VK_GROUP_ID")

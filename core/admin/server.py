@@ -686,7 +686,7 @@ async def edit_channel_form(request: Request, name: str):
     is_redditvk = channel_type == "redditvk"
     rm_checked = (
         "checked"
-        if cfg.get("REQUIRE_MEDIA", "").lower() in ("1", "true", "yes")
+        if (cfg.get("REQUIRE_MEDIA") or "").lower() in ("1", "true", "yes")
         else ""
     )
     disabled = " disabled" if demo else ""
