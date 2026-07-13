@@ -12,6 +12,7 @@ import sys
 import zlib
 import re
 import asyncio
+import shutil
 
 from dotenv import dotenv_values
 
@@ -91,7 +92,6 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
 
 def _vk_prepare_copy(media_path, cfg):
     if cfg.get("VK_TOKEN") and media_path and media_path != REPOST_BANNER:
-        import shutil
         cp = media_path + ".vktmp"
         shutil.copy2(media_path, cp)
         return cp
@@ -102,6 +102,14 @@ def _vk_cleanup(vk_copy):
     if vk_copy and os.path.exists(vk_copy):
         try:
             os.remove(vk_copy)
+        except OSError:
+            pass
+
+
+def _cleanup_media(path):
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
         except OSError:
             pass
 
@@ -193,14 +201,17 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
 
     if db.post_exists(source_channel, source_msg_id):
         print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
+        _cleanup_media(media_path)
         return False
     if text and db.content_exists(text):
         print(f"[RE:POST] Duplicate content (hash match)")
+        _cleanup_media(media_path)
         return False
 
     if text and has_breaking_keyword(text):
         if is_blocked_content(text):
             print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
+            _cleanup_media(media_path)
             return False
 
         print(f"[RE:POST] >> {text[:80]}...")
@@ -211,12 +222,14 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
             translated = translator.translate(text)
             if not translated:
                 print(f"[RE:POST] Translation failed")
+                _cleanup_media(media_path)
                 return False
 
         translated = clean_source_footer(translated)
 
         if not translated.strip():
             print(f"[RE:POST] Empty after footer cleaning, skipping")
+            _cleanup_media(media_path)
             return False
 
         lines = translated.strip().split("\n")
@@ -241,21 +254,25 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
 
     vk_copy = _vk_prepare_copy(media_path, cfg)
 
-    # Use repost.png as fallback image
-    if not media_path and os.path.exists(REPOST_BANNER):
-        media_path = REPOST_BANNER
-        media_type = "photo"
-
     if post is None:
         print(f"[RE:POST] No content to publish from {source_channel}")
         if vk_copy:
             _vk_cleanup(vk_copy)
+        _cleanup_media(media_path)
         return False
 
     total_published = db.get_stats()["published"]
 
-    # Pass a copy to Publisher (it will delete it); keep original for VK
-    pub_media = vk_copy if vk_copy else media_path
+    if vk_copy:
+        pub_media = vk_copy
+    elif media_path:
+        pub_media = media_path
+    elif os.path.exists(REPOST_BANNER):
+        pub_media = os.path.join(MEDIA_DIR, "banner_fallback.jpg")
+        shutil.copy2(REPOST_BANNER, pub_media)
+        media_type = "photo"
+    else:
+        pub_media = None
 
     success = pub.publish(
         text=post,
@@ -285,11 +302,7 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
 
     if vk_copy:
         _vk_cleanup(vk_copy)
-    if media_path and os.path.exists(media_path):
-        try:
-            os.remove(media_path)
-        except OSError:
-            pass
+    _cleanup_media(media_path)
     return success
 
 
