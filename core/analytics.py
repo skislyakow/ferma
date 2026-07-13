@@ -184,7 +184,7 @@ class FarmAnalytics:
         else:
             if token:
                 r = self._bot_api(
-                    token, "getChatMembersCount", {"chat_id": f"@{target}"}
+                    token, "getChatMemberCount", {"chat_id": f"@{target}"}
                 )
                 if r.get("ok"):
                     result["subscribers"] = r["result"]
