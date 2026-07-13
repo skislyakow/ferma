@@ -17,7 +17,7 @@ sys.path.insert(
     ),
 )
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
 _admin_env = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(_admin_env, override=False)
@@ -683,7 +683,6 @@ async def edit_channel_form(request: Request, name: str):
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return HTMLResponse(f"Канал '{name}' не найден", 404)
-    from dotenv import dotenv_values
 
     cfg = dotenv_values(env_path)
 
@@ -1063,8 +1062,6 @@ def _get_default_yc_keys() -> dict | None:
     for entry in os.listdir(CHANNELS_DIR):
         env_path = os.path.join(CHANNELS_DIR, entry, ".env")
         if os.path.isfile(env_path):
-            from dotenv import dotenv_values
-
             cfg = dotenv_values(env_path)
             api_key = cfg.get("YC_TRANSLATE_API_KEY", "")
             folder_id = cfg.get("YC_FOLDER_ID", "")
@@ -1079,7 +1076,6 @@ def _start_screen(name: str):
     env_path = os.path.join(CHANNELS_DIR, name, ".env")
     if not os.path.exists(env_path):
         return
-    from dotenv import dotenv_values
 
     cfg = dotenv_values(env_path)
     ctype = cfg.get("CHANNEL_TYPE", "")
