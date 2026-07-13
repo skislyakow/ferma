@@ -9,7 +9,10 @@ anon.session
 # Runtime data
 *.db
 bot.log
+bot.pid
+farm_pids.json
 channels/*/published.json
+start_*.ps1
 
 # Downloaded media (reproducible)
 channels/*/media/
