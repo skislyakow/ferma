@@ -58,7 +58,7 @@ class Database:
     def make_text_hash(text: str) -> str:
         if not text:
             return ""
-        return hashlib.md5(text.encode("utf-8")).hexdigest()
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def content_exists(self, text: str) -> bool:
         if not text:
