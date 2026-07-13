@@ -816,8 +816,6 @@ async def main(env_path: str):
 
     async def on_telegram(msg):
         text = strip_html((msg.text or msg.message or "").strip())
-        if not text:
-            return
 
         source_channel = getattr(msg.chat, "username", "") or str(msg.chat.id)
         source_msg_id = msg.id
@@ -834,6 +832,28 @@ async def main(env_path: str):
                     media_path = path
             except Exception as e:
                 print(f"[RE:POST] Media download failed: {e}")
+        elif msg.video:
+            try:
+                os.makedirs(MEDIA_DIR, exist_ok=True)
+                fname = f"repost_{source_msg_id}.mp4"
+                path = await msg.download_media(file=os.path.join(MEDIA_DIR, fname))
+                if path and os.path.exists(path):
+                    media_path = path
+                    media_type = "video"
+            except Exception as e:
+                print(f"[RE:POST] Video download failed: {e}")
+        elif msg.document:
+            try:
+                os.makedirs(MEDIA_DIR, exist_ok=True)
+                fname = f"repost_{source_msg_id}.bin"
+                path = await msg.download_media(file=os.path.join(MEDIA_DIR, fname))
+                if path and os.path.exists(path):
+                    media_path = path
+            except Exception as e:
+                print(f"[RE:POST] Document download failed: {e}")
+
+        if not text and not media_path:
+            return
 
         await process_news(source_channel, source_msg_id, text,
                            translator, pub, db, cfg,
