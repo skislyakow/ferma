@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import re
+import random
 import asyncio
 import tempfile
 import traceback
@@ -502,6 +503,10 @@ async def run_cycle(
     print(f"[{name}] VK group: {vk_group_id}")
     print(f"[{name}] Already published: {len(published)} posts")
     print(f"[{name}] Interval: {interval}s")
+
+    startup_delay = random.randint(0, 120)
+    print(f"[{name}] Startup delay: {startup_delay}s (spread load)")
+    await asyncio.sleep(startup_delay)
 
     while True:
         try:
