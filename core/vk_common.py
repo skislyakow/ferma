@@ -100,7 +100,7 @@ def fetch_entries(subreddit, name="VK"):
     return []
 
 
-def _normalize_image_url(url: str) -> str | None:
+def _normalize_image_url(url: str) -> str:
     url = unescape(url)
     url = re.sub(r"\?width=\d+&.*", "", url)
     url = url.replace("external-i.redd.it", "i.redd.it").replace(
@@ -125,7 +125,10 @@ def extract_image_urls(entry: dict) -> list[str]:
     for m in re.finditer(r'<a\s[^>]*href="([^"]+)"', summary):
         url = unescape(m.group(1))
         url = re.sub(r"\?.*", "", url)
-        if any(url.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp")):
+        if any(
+            url.endswith(ext)
+            for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp")
+        ):
             if url not in urls:
                 urls.append(url)
 
@@ -142,7 +145,7 @@ def extract_image_urls(entry: dict) -> list[str]:
     return urls
 
 
-def fetch_reddit_images(post_url, name="VK"):
+def fetch_reddit_images(post_url: str, name: str = "VK") -> list[str]:
     import requests
 
     try:
