@@ -69,21 +69,34 @@ def detect_video(entry):
 
 def fetch_entries(subreddit, name="VK"):
     import feedparser
+    import requests as _req
 
     url = f"https://www.reddit.com/r/{subreddit}/new/.rss"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     for attempt in range(3):
-        feed = feedparser.parse(url, agent=headers["User-Agent"])
-        if feed.entries:
-            return feed.entries
-        if attempt < 2:
+        try:
+            r = _req.get(url, headers=headers, timeout=15)
+            if r.status_code != 200:
+                print(
+                    f"[{name}] RSS returned {r.status_code} (attempt {attempt + 1}/3)"
+                )
+                if attempt < 2:
+                    time.sleep(30)
+                continue
+            feed = feedparser.parse(r.text)
+            if feed.entries:
+                return feed.entries
             print(
                 f"[{name}] RSS empty (attempt {attempt + 1}/3), retrying in 30s..."
             )
             time.sleep(30)
-    return feed.entries
+        except Exception as e:
+            print(f"[{name}] RSS fetch failed: {e} (attempt {attempt + 1}/3)")
+            if attempt < 2:
+                time.sleep(30)
+    return []
 
 
 def _normalize_image_url(url: str) -> str | None:
