@@ -11,7 +11,6 @@ import asyncio
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from dotenv import dotenv_values  # noqa: E402
 from core.vk_common import run_cycle  # noqa: E402
 
 MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
