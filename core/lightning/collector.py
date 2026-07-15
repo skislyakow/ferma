@@ -96,4 +96,4 @@ class LightningCollector:
     async def stop(self):
         self._running = False
         if self.client:
-            await self.client.disconnect()
+            await self.client.disconnect()  # type: ignore[reportGeneralTypeIssues]
