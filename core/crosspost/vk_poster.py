@@ -35,15 +35,42 @@ class VKPoster:
             raise Exception(f"VK API error [{code}]: {data['error']['error_msg']}")
         return data.get("response")
 
-    def _get_upload_url(self) -> str:
-        return self._call("photos.getWallUploadServer", {"group_id": self.group_id})
-
     def upload_photo(self, file_path: str) -> str:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Photo not found: {file_path}")
 
-        upload_data = self._get_upload_url()
-        upload_url = upload_data["upload_url"]  # type: ignore[index]
+        try:
+            return self._upload_photo_via_stories(file_path)
+        except Exception:
+            return self._upload_photo_via_wall(file_path)
+
+    def _upload_photo_via_stories(self, file_path: str) -> str:
+        upload_data = self._call("stories.getPhotoUploadServer", {
+            "group_id": self.group_id,
+            "add_to_news": 1,
+        })
+        upload_url = upload_data["upload_url"]
+
+        with open(file_path, "rb") as f:
+            resp = requests.post(upload_url, files={"photo": f}, timeout=60)
+            try:
+                raw = resp.json()
+            except ValueError:
+                raise Exception(f"VK upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
+
+        upload_result = raw["response"]["upload_result"]
+        saved = self._call("stories.save", {"upload_results": upload_result})
+        story = saved["items"][0]
+        photo = story["photo"]
+        story_id = story["id"]
+
+        self._call("stories.delete", {"story_id": story_id, "owner_id": self.group_id})
+
+        return f"photo{photo['owner_id']}_{photo['id']}"
+
+    def _upload_photo_via_wall(self, file_path: str) -> str:
+        upload_data = self._call("photos.getWallUploadServer", {"group_id": self.group_id})
+        upload_url = upload_data["upload_url"]
 
         with open(file_path, "rb") as f:
             resp = requests.post(upload_url, files={"photo": f}, timeout=60)
