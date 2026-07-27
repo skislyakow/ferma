@@ -62,9 +62,6 @@ class VKPoster:
         saved = self._call("stories.save", {"upload_results": upload_result})
         story = saved["items"][0]
         photo = story["photo"]
-        story_id = story["id"]
-
-        self._call("stories.delete", {"story_id": story_id, "owner_id": self.group_id})
 
         return f"photo{photo['owner_id']}_{photo['id']}"
 
