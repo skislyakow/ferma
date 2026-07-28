@@ -226,48 +226,6 @@ def download_image(url, filename, media_dir, name="VK"):
         return None
 
 
-def _extract_frame(video_path, filename, media_dir):
-    import subprocess
-
-    frame_path = os.path.join(media_dir, f"{filename}_frame.jpg")
-    try:
-        result = subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-ss", "00:00:01",
-                "-vframes", "1",
-                "-q:v", "2",
-                frame_path,
-            ],
-            capture_output=True,
-            timeout=30,
-        )
-        if result.returncode == 0 and os.path.exists(frame_path) and os.path.getsize(frame_path) > 1000:
-            return frame_path
-        result = subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-vframes", "1",
-                "-q:v", "2",
-                frame_path,
-            ],
-            capture_output=True,
-            timeout=30,
-        )
-        if result.returncode == 0 and os.path.exists(frame_path) and os.path.getsize(frame_path) > 1000:
-            return frame_path
-    except Exception as e:
-        print(f"[frame] Extract failed: {e}")
-    if os.path.exists(frame_path):
-        try:
-            os.remove(frame_path)
-        except OSError:
-            pass
-    return None
-
-
 def download_reddit_video(video_url, filename, media_dir, name="VK"):
     import requests as _req
 
@@ -478,18 +436,7 @@ async def process_entry(
         cleanup_files = [media_path]
         if media_path:
             if media_type == "video":
-                try:
-                    attachment = vk.upload_video(media_path, title=title[:100])
-                except Exception as ve:
-                    print(f"[{name}] Video upload failed: {ve}, extracting frame...")
-                    frame_path = _extract_frame(media_path, media_prefix + pid, media_dir)
-                    if frame_path:
-                        media_path = frame_path
-                        media_type = "photo"
-                        attachment = vk.upload_photo(frame_path)
-                        cleanup_files.append(frame_path)
-                    else:
-                        raise ve
+                attachment = vk.upload_video(media_path, title=title[:100])
             else:
                 attachment = vk.upload_photo(media_path)
         vk.post_to_wall(message=post_text, attachment=attachment)
