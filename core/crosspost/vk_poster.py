@@ -72,48 +72,9 @@ class VKPoster:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Video not found: {file_path}")
 
-        try:
-            return self._upload_video_via_stories(file_path)
-        except Exception:
-            return self._upload_video_via_wall(file_path)
-
-    def _upload_video_via_stories(self, file_path: str) -> str:
-        upload_data = self._call("stories.getVideoUploadServer", {
-            "group_id": self.group_id,
-        })
-        upload_url = upload_data["upload_url"]
-
-        with open(file_path, "rb") as f:
-            resp = requests.post(upload_url, files={"video_file": f}, timeout=120)
-            try:
-                raw = resp.json()
-            except ValueError:
-                raise Exception(f"VK video upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
-
-        upload_result = raw.get("response", {}).get("upload_result") or raw.get("upload_result")
-        if not upload_result:
-            raise Exception(f"No upload_result in stories upload response: {raw}")
-
-        saved = self._call("stories.save", {"upload_results": upload_result})
-        items = saved.get("items", [])
-        if not items:
-            raise Exception("stories.save returned no items")
-
-        story = items[0]
-        video = story.get("video") or story.get("photo")
-        vid = video.get("id")
-        vowner = video.get("owner_id", self.owner_id)
-
-        attach = f"video{vowner}_{vid}"
-        ak = video.get("access_key")
-        if ak:
-            attach += f"_{ak}"
-        return attach
-
-    def _upload_video_via_wall(self, file_path: str) -> str:
         save_data = self._call("video.save", {
             "group_id": self.group_id,
-            "name": "Video",
+            "name": title or "Video",
             "wallpost": 0,
         })
         upload_url = save_data["upload_url"]
