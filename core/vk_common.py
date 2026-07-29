@@ -6,6 +6,10 @@ import re
 import random
 import asyncio
 import tempfile
+import traceback
+import feedparser
+import requests
+from dotenv import dotenv_values
 from html import unescape
 
 
@@ -31,8 +35,6 @@ def save_published(posted, tracker_path):
 
 
 def translate_text(text, api_key, folder_id, name="VK"):
-    import requests
-
     if not text or not api_key:
         return text
     try:
@@ -68,16 +70,13 @@ def detect_video(entry):
 
 
 def fetch_entries(subreddit, name="VK"):
-    import feedparser
-    import requests as _req
-
     url = f"https://www.reddit.com/r/{subreddit}/new/.rss"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     for attempt in range(3):
         try:
-            r = _req.get(url, headers=headers, timeout=15)
+            r = requests.get(url, headers=headers, timeout=15)
             if r.status_code != 200:
                 print(
                     f"[{name}] RSS returned {r.status_code} (attempt {attempt + 1}/3)"
@@ -145,8 +144,6 @@ def extract_image_urls(entry: dict) -> list[str]:
 
 
 def fetch_reddit_images(post_url: str, name: str = "VK") -> list[str]:
-    import requests
-
     try:
         old_url = post_url.replace("www.reddit.com", "old.reddit.com")
         json_url = old_url.rstrip("/") + ".json"
@@ -203,8 +200,6 @@ def fetch_reddit_images(post_url: str, name: str = "VK") -> list[str]:
 
 
 def download_image(url, filename, media_dir, name="VK"):
-    import requests
-
     try:
         ext = url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
         if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
@@ -226,15 +221,13 @@ def download_image(url, filename, media_dir, name="VK"):
 
 
 def download_reddit_video(video_url, filename, media_dir, name="VK"):
-    import requests as _req
-
     video_file = None
     audio_file = None
     merged = None
     try:
         video_id = video_url.rstrip("/").split("/")[-1]
         manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
-        r = _req.get(
+        r = requests.get(
             manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15
         )
         if r.status_code != 200:
@@ -272,7 +265,7 @@ def download_reddit_video(video_url, filename, media_dir, name="VK"):
         merged = os.path.join(media_dir, f"{filename}.mp4")
 
         url = f"https://v.redd.it/{video_id}/{video_base}"
-        vr = _req.get(
+        vr = requests.get(
             url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True
         )
         vr.raise_for_status()
@@ -283,7 +276,7 @@ def download_reddit_video(video_url, filename, media_dir, name="VK"):
 
         if audio_base:
             url = f"https://v.redd.it/{video_id}/{audio_base}"
-            ar = _req.get(
+            ar = requests.get(
                 url,
                 headers={"User-Agent": "Mozilla/5.0"},
                 timeout=30,
@@ -475,7 +468,6 @@ async def run_cycle(
     interval_default=600,
 ):
     env_path = os.path.abspath(env_path)
-    from dotenv import dotenv_values
     from core.crosspost.vk_poster import VKPoster
 
     env = dotenv_values(env_path)
