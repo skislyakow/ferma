@@ -6,7 +6,6 @@ import re
 import random
 import asyncio
 import tempfile
-import traceback
 from html import unescape
 
 

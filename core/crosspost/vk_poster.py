@@ -20,7 +20,10 @@ class VKPoster:
             "access_token": self.token,
             "v": self.api_v,
         })
-        resp = requests.post(f"{VK_API}/{method}", data=params, timeout=30)
+        try:
+            resp = requests.post(f"{VK_API}/{method}", data=params, timeout=30)
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"VK API request failed: {e}")
         try:
             data = resp.json()
         except ValueError:
@@ -43,7 +46,10 @@ class VKPoster:
         upload_url = upload_data["upload_url"]
 
         with open(file_path, "rb") as f:
-            resp = requests.post(upload_url, files={"photo": f}, timeout=60)
+            try:
+                resp = requests.post(upload_url, files={"photo": f}, timeout=60)
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"VK photo upload failed: {e}")
             try:
                 raw = resp.json()
             except ValueError:
@@ -80,7 +86,10 @@ class VKPoster:
         upload_url = save_data["upload_url"]
 
         with open(file_path, "rb") as f:
-            resp = requests.post(upload_url, files={"video_file": f}, timeout=120)
+            try:
+                resp = requests.post(upload_url, files={"video_file": f}, timeout=120)
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"VK video upload failed: {e}")
             try:
                 result = resp.json()
             except ValueError:

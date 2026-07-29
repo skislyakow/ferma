@@ -26,6 +26,7 @@ from core.publisher.publisher import Publisher  # noqa: E402
 from core.db.database import Database  # noqa: E402
 from core.filter.manage import load_filters  # noqa: E402
 from core.crosspost.vk_poster import VKPoster
+from core.vk_common import download_reddit_video
 
 BREAKING_KEYWORDS = [
     "breaking", "just in", "alert", "update", "developing",
@@ -193,118 +194,126 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
     """Shared pipeline: filter → translate → format → publish → save."""
     is_media_only = False
     post = None
+    vk_copy = None
+    try:
+        if not text and not media_path:
+            return False
 
-    if not text and not media_path:
-        return False
+        if text:
+            text = strip_html(text)
 
-    if text:
-        text = strip_html(text)
-
-    if db.post_exists(source_channel, source_msg_id):
-        print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
-        _cleanup_media(media_path)
-        return False
-    if text and db.content_exists(text):
-        print(f"[RE:POST] Duplicate content (hash match)")
-        _cleanup_media(media_path)
-        return False
-
-    if text and has_breaking_keyword(text):
-        if is_blocked_content(text):
-            print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
+        if db.post_exists(source_channel, source_msg_id):
+            print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
+            _cleanup_media(media_path)
+            return False
+        if text and db.content_exists(text):
+            print(f"[RE:POST] Duplicate content (hash match)")
             _cleanup_media(media_path)
             return False
 
-        print(f"[RE:POST] >> {text[:80]}...")
-
-        if is_russian(text):
-            translated = text
-        else:
-            translated = translator.translate(text)
-            if not translated:
-                print(f"[RE:POST] Translation failed")
+        if text and has_breaking_keyword(text):
+            if is_blocked_content(text):
+                print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
                 _cleanup_media(media_path)
                 return False
 
-        translated = clean_source_footer(translated)
+            print(f"[RE:POST] >> {text[:80]}...")
 
-        if not translated.strip():
-            print(f"[RE:POST] Empty after footer cleaning, skipping")
+            if is_russian(text):
+                translated = text
+            else:
+                translated = translator.translate(text)
+                if not translated:
+                    print(f"[RE:POST] Translation failed")
+                    _cleanup_media(media_path)
+                    return False
+
+            translated = clean_source_footer(translated)
+
+            if not translated.strip():
+                print(f"[RE:POST] Empty after footer cleaning, skipping")
+                _cleanup_media(media_path)
+                return False
+
+            lines = translated.strip().split("\n")
+            headline = lines[0].strip()
+            if not headline or len(headline) < 10 or not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', headline):
+                if media_path:
+                    is_media_only = True
+                else:
+                    print(f"[RE:POST] Empty/useless headline, skipping")
+                    return False
+            body = "\n".join(lines[1:])
+            if not is_media_only:
+                post = format_post(headline, body, cfg["TARGET_CHANNEL"])
+        elif media_path:
+            is_media_only = True
+
+        if is_media_only:
+            post = f'👉 Кадр дня\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
+            headline = "Кадр дня"
+
+        has_media = 1 if media_path else 0
+
+        vk_copy = _vk_prepare_copy(media_path, cfg)
+
+        if post is None:
+            print(f"[RE:POST] No content to publish from {source_channel}")
+            if vk_copy:
+                _vk_cleanup(vk_copy)
             _cleanup_media(media_path)
             return False
 
-        lines = translated.strip().split("\n")
-        headline = lines[0].strip()
-        if not headline or len(headline) < 10 or not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', headline):
-            if media_path:
-                is_media_only = True
-            else:
-                print(f"[RE:POST] Empty/useless headline, skipping")
-                return False
-        body = "\n".join(lines[1:])
-        if not is_media_only:
-            post = format_post(headline, body, cfg["TARGET_CHANNEL"])
-    elif media_path:
-        is_media_only = True
+        total_published = db.get_stats()["published"]
 
-    if is_media_only:
-        post = f'👉 Кадр дня\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
-        headline = "Кадр дня"
+        if vk_copy:
+            pub_media = vk_copy
+        elif media_path:
+            pub_media = media_path
+        elif os.path.exists(REPOST_BANNER):
+            pub_media = os.path.join(MEDIA_DIR, "banner_fallback.jpg")
+            shutil.copy2(REPOST_BANNER, pub_media)
+            media_type = "photo"
+        else:
+            pub_media = None
 
-    has_media = 1 if media_path else 0
+        success = pub.publish(
+            text=post,
+            chat_id=cfg["TARGET_CHANNEL"],
+            total_published=total_published,
+            cpa_links=cfg["CPA_LINKS"],
+            cpa_every=cfg["CPA_INSERT_EVERY"],
+            media_path=pub_media,
+            media_type=media_type,
+            parse_mode="HTML",
+        )
 
-    vk_copy = _vk_prepare_copy(media_path, cfg)
+        if success:
+            total_published += 1
+            db.save_post(
+                source_channel=source_channel,
+                source_message_id=source_msg_id,
+                text=text,
+                views=0,
+                reactions_count=0,
+                has_media=has_media,
+                published=1,
+            )
+            print(f"[RE:POST] Published: {headline[:50]}")
+            if vk_copy and os.path.exists(media_path):
+                _crosspost_to_vk(media_path, post, cfg, media_type=media_type)
 
-    if post is None:
-        print(f"[RE:POST] No content to publish from {source_channel}")
+        if vk_copy:
+            _vk_cleanup(vk_copy)
+        _cleanup_media(media_path)
+        return success
+    except Exception as e:
+        print(f"[RE:POST] process_news error: {e}")
+        traceback.print_exc()
         if vk_copy:
             _vk_cleanup(vk_copy)
         _cleanup_media(media_path)
         return False
-
-    total_published = db.get_stats()["published"]
-
-    if vk_copy:
-        pub_media = vk_copy
-    elif media_path:
-        pub_media = media_path
-    elif os.path.exists(REPOST_BANNER):
-        pub_media = os.path.join(MEDIA_DIR, "banner_fallback.jpg")
-        shutil.copy2(REPOST_BANNER, pub_media)
-        media_type = "photo"
-    else:
-        pub_media = None
-
-    success = pub.publish(
-        text=post,
-        chat_id=cfg["TARGET_CHANNEL"],
-        total_published=total_published,
-        cpa_links=cfg["CPA_LINKS"],
-        cpa_every=cfg["CPA_INSERT_EVERY"],
-        media_path=pub_media,
-        media_type=media_type,
-        parse_mode="HTML",
-    )
-
-    if success:
-        total_published += 1
-        db.save_post(
-            source_channel=source_channel,
-            source_message_id=source_msg_id,
-            text=text,
-            views=0,
-            reactions_count=0,
-            has_media=has_media,
-            published=1,
-        )
-        print(f"[RE:POST] Published: {headline[:50]}")
-        if vk_copy and os.path.exists(media_path):
-            _crosspost_to_vk(media_path, post, cfg, media_type=media_type)
-
-    if vk_copy:
-        _vk_cleanup(vk_copy)
-    _cleanup_media(media_path)
-    return success
 
 
 async def auth_once(env_path: str, code: str | None = None):
@@ -493,95 +502,6 @@ def _detect_reddit_video(summary):
     return None
 
 
-def _download_reddit_video(video_url, filename):
-    import requests as _req
-    try:
-        video_id = video_url.rstrip("/").split("/")[-1]
-        manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
-        r = _req.get(manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-        if r.status_code != 200:
-            print(f"[REDDIT] DASH manifest {r.status_code}")
-            return None
-
-        text = r.text
-        has_audio = 'contentType="audio"' in text
-
-        video_rep = re.findall(
-            r'<Representation[^>]+bandwidth="(\d+)"[^>]+height="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
-            text, re.DOTALL
-        )
-        if not video_rep:
-            print("[REDDIT] No video representations found")
-            return None
-
-        best = max(video_rep, key=lambda x: int(x[1]))
-        video_base = best[2]
-        video_height = best[1]
-
-        audio_base = None
-        if has_audio:
-            audio_section = text[text.index('contentType="audio"'):]
-            audio_rep = re.findall(
-                r'<Representation[^>]+bandwidth="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
-                audio_section, re.DOTALL
-            )
-            if audio_rep:
-                best_audio = max(audio_rep, key=lambda x: int(x[0]))
-                audio_base = best_audio[1]
-
-        os.makedirs(MEDIA_DIR, exist_ok=True)
-        merged = os.path.join(MEDIA_DIR, f"{filename}.mp4")
-
-        url = f"https://v.redd.it/{video_id}/{video_base}"
-        vr = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
-        vr.raise_for_status()
-        video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
-        with open(video_file, "wb") as f:
-            for chunk in vr.iter_content(8192):
-                f.write(chunk)
-
-        audio_file = None
-        if audio_base:
-            url = f"https://v.redd.it/{video_id}/{audio_base}"
-            ar = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
-            ar.raise_for_status()
-            audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
-            with open(audio_file, "wb") as f:
-                for chunk in ar.iter_content(8192):
-                    f.write(chunk)
-
-        if video_file and audio_file:
-            import subprocess
-            result = subprocess.run(
-                ["ffmpeg", "-y", "-i", video_file, "-i", audio_file,
-                 "-c:v", "copy", "-c:a", "aac", "-strict", "experimental", merged],
-                capture_output=True, timeout=60
-            )
-            if result.returncode == 0:
-                os.remove(video_file)
-                os.remove(audio_file)
-                print(f"[REDDIT] Merged {video_height}p video + audio")
-                return merged
-            else:
-                print(f"[REDDIT] ffmpeg merge failed: {result.stderr[:200]}")
-
-        if video_file:
-            os.rename(video_file, merged)
-            if audio_file and os.path.exists(audio_file):
-                os.remove(audio_file)
-            print(f"[REDDIT] Downloaded {video_height}p video (no audio)")
-            return merged
-
-        return None
-    except Exception as e:
-        for f in [video_file, audio_file, merged]:
-            if f and os.path.exists(f):
-                try: os.remove(f)
-                except OSError: pass
-        print(f"[Reddit Poll] Video download failed: {e}")
-        return None
-
-
 async def reddit_poller(subreddits, cfg, translator, pub, db):
     import feedparser
     import time
@@ -643,7 +563,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         # Try video first (v.redd.it)
                         video_url = _detect_reddit_video(_src)
                         if video_url:
-                            media_path = await asyncio.to_thread(_download_reddit_video, video_url, f"reddit_{pid}")
+                            media_path = await asyncio.to_thread(download_reddit_video, video_url, f"reddit_{pid}", MEDIA_DIR, "REDDIT")
                             if media_path:
                                 media_type = "video"
 
@@ -887,7 +807,11 @@ async def main(env_path: str):
     print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS + {len(ru_channels)} RU + {len(reddit_subs)} Reddit")
     print(f"[RE:POST] Running...")
 
-    await asyncio.gather(*tasks)
+    try:
+        await asyncio.gather(*tasks)
+    except Exception as e:
+        print(f"[RE:POST] Fatal error in main loop: {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
