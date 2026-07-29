@@ -38,7 +38,6 @@ BREAKING_KEYWORDS = [
 ]
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REPOST_BANNER = os.path.join(PROJECT_ROOT, "repost2.png")
 SESSION_FILE = "repost.session"
 MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
 VK_TRACKER_PATH = os.path.join(PROJECT_ROOT, "channels", "repost", "vk_posted.json")
@@ -47,7 +46,7 @@ VK_TRACKER_PATH = os.path.join(PROJECT_ROOT, "channels", "repost", "vk_posted.js
 def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: str = VK_TRACKER_PATH, media_type: str = "photo"):
     if not cfg.get("VK_TOKEN") or not cfg.get("VK_GROUP_ID"):
         return
-    if not media_path or media_path == REPOST_BANNER:
+    if not media_path:
         return
     try:
         import json
@@ -93,7 +92,7 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
 
 
 def _vk_prepare_copy(media_path, cfg):
-    if cfg.get("VK_TOKEN") and media_path and media_path != REPOST_BANNER:
+    if cfg.get("VK_TOKEN") and media_path:
         cp = media_path + ".vktmp"
         shutil.copy2(media_path, cp)
         return cp
@@ -270,10 +269,6 @@ async def process_news(source_channel: str, source_msg_id: int, text: str,
             pub_media = vk_copy
         elif media_path:
             pub_media = media_path
-        elif os.path.exists(REPOST_BANNER):
-            pub_media = os.path.join(MEDIA_DIR, "banner_fallback.jpg")
-            shutil.copy2(REPOST_BANNER, pub_media)
-            media_type = "photo"
         else:
             pub_media = None
 
@@ -456,7 +451,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
             m_path, m_type = media_path, media_type or "photo"
             vk_copy = _vk_prepare_copy(m_path, cfg)
             if not m_path:
-                m_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
+                m_path = None
                 m_type = "photo"
 
             total_published = db.get_stats()["published"]
@@ -666,7 +661,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
                     vk_copy = _vk_prepare_copy(media_path, cfg)
                     if not media_path:
-                        media_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
+                        media_path = None
                         media_type = "photo"
 
                     pub_media = vk_copy if vk_copy else media_path
