@@ -4,6 +4,7 @@ import requests
 import sqlite3
 from datetime import datetime
 from typing import Any
+from dotenv import dotenv_values
 
 
 class FarmAnalytics:
@@ -30,7 +31,9 @@ class FarmAnalytics:
     def _parse_channel_list(self, raw: str) -> list[str]:
         return [x.strip().lstrip("@") for x in raw.split(",") if x.strip()]
 
-    def _vk_api(self, token: str, method: str, params: dict | None = None):
+    def _vk_api(
+        self, token: str, method: str, params: dict | None = None
+    ) -> dict:
         url = f"https://api.vk.com/method/{method}"
         try:
             r = requests.get(
@@ -38,14 +41,19 @@ class FarmAnalytics:
                 params={**(params or {}), "access_token": token, "v": "5.199"},
                 timeout=10,
             )
-            return r.json()
+            data = r.json()
+            if isinstance(data, dict):
+                return data
+            return {"error": "unexpected response"}
         except Exception:
             return {"error": "request failed"}
 
     def _read_vk_log(self, name: str, limit: int = 10) -> list:
         log_path = os.path.join(self.channels_dir, name, "bot.log")
         if not os.path.exists(log_path):
-            log_path = os.path.join(self.channels_dir, name, "logs", f"{name}.log")
+            log_path = os.path.join(
+                self.channels_dir, name, "logs", f"{name}.log"
+            )
         if not os.path.exists(log_path):
             return []
         posts = []
@@ -64,8 +72,6 @@ class FarmAnalytics:
         if not os.path.exists(env_path):
             return {"error": "no .env"}
 
-        from dotenv import dotenv_values
-
         cfg = dotenv_values(env_path)
         token = cfg.get("BOT_TOKEN") or ""
         target = (cfg.get("TARGET_CHANNEL") or "").lstrip("@")
@@ -81,7 +87,9 @@ class FarmAnalytics:
             cfg.get("SOURCE_CHANNELS") or ""
         )
         rss_feeds = [
-            x.strip() for x in (cfg.get("RSS_FEEDS") or "").split(",") if x.strip()
+            x.strip()
+            for x in (cfg.get("RSS_FEEDS") or "").split(",")
+            if x.strip()
         ]
         ru_sources_raw = self._parse_channel_list(
             cfg.get("RU_SOURCE_CHANNELS") or ""
@@ -112,13 +120,12 @@ class FarmAnalytics:
                 name_resolved = ch
             ru_source_channels.append({"username": ch, "title": name_resolved})
 
+        donors = len(source_channels) + len(rss_feeds) + len(reddit_subreddits)
         result: dict[str, Any] = {
             "name": name,
             "target": target or f"VK {vk_group_id}",
             "type": chan_type,
-            "donors": len(source_channels)
-            + len(rss_feeds)
-            + len(reddit_subreddits),
+            "donors": donors,
             "source_channels": source_channels,
             "rss_feeds": rss_feeds,
             "ru_source_channels": ru_source_channels,
@@ -137,9 +144,9 @@ class FarmAnalytics:
                 {"group_id": vk_group_id, "fields": "members_count"},
             )
             if "response" in r and r["response"].get("groups"):
-                result["subscribers"] = r["response"]["groups"][0].get(  # type: ignore[index]
+                result["subscribers"] = r["response"]["groups"][0].get(
                     "members_count", 0
-                )  # type: ignore
+                )
 
             published_path = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -157,11 +164,15 @@ class FarmAnalytics:
                     pass
 
             try:
-                r = self._vk_api(vk_token, "wall.get", {
-                    "owner_id": f"-{vk_group_id}",
-                    "count": 10,
-                    "filter": "owner",
-                })
+                r = self._vk_api(
+                    vk_token,
+                    "wall.get",
+                    {
+                        "owner_id": f"-{vk_group_id}",
+                        "count": 10,
+                        "filter": "owner",
+                    },
+                )
                 if "response" in r:
                     for post in r["response"].get("items", []):
                         post_type = "text"
@@ -172,14 +183,16 @@ class FarmAnalytics:
                                 break
                             elif t == "photo" and post_type == "text":
                                 post_type = "photo"
-                        result["vk_posts"].append({
-                            "id": post["id"],
-                            "date": post["date"],
-                            "title": post.get("text", "")[:80],
-                            "type": post_type,
-                            "views": post.get("views", {}).get("count", 0),
-                            "ok": 1,
-                        })
+                        result["vk_posts"].append(
+                            {
+                                "id": post["id"],
+                                "date": post["date"],
+                                "title": post.get("text", "")[:80],
+                                "type": post_type,
+                                "views": post.get("views", {}).get("count", 0),
+                                "ok": 1,
+                            }
+                        )
             except Exception:
                 pass
         else:
