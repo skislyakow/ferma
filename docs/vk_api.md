@@ -56,6 +56,23 @@ https://oauth.vk.com/authorize?client_id={APP_ID}&display=page&redirect_uri=http
 | Приложение заблокировано | Создай новое |
 | Аккаунт забанен | Создай новый аккаунт |
 
+### python273/vk_api (библиотека, используется для ре-авторизации)
+- Репо: https://github.com/python273/vk_api
+- Если текущий токен сдох (error 5), используй библиотеку для нового:
+  ```python
+  import vk_api
+  vk_session = vk_api.VkApi(login="+79001234567", password="...", app_id=6222115, scope="wall,groups,photos,video,offline")
+  try:
+      vk_session.authorization()
+  except vk_api.AuthError as e:
+      print(f"Auth error: {e}")
+  token = vk_session.token["access_token"]
+  print(token)  # вставь в .env
+  ```
+- При первом запуске запросит код из SMS/Google Authenticator (2FA)
+- После успешной авторизации создаётся `vk_config.v2.json` — токен кешируется, 2FA не потребуется повторно
+- Установка: `pip install vk-api` (пакет `vk-api`, импортируется как `vk_api`)
+
 ### vkhost.github.io (альтернативный сервис)
 - Этот сервис упрощает получение токенов, но VK банит страницы за использование сторонних OAuth-клиентов
 - Используй официальный OAuth (см. выше) — безопаснее
