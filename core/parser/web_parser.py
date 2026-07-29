@@ -11,10 +11,12 @@ class WebParser:
     def __init__(self, db: Database):
         self.db = db
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
+            }
+        )
         os.makedirs("media", exist_ok=True)
 
     def _extract_video_url(self, block: str) -> str | None:
@@ -32,47 +34,44 @@ class WebParser:
             r = self.session.get(url, timeout=120, stream=True)
             r.raise_for_status()
             total = 0
-            with open(path, 'wb') as f:
+            with open(path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
                     total += len(chunk)
-            print(f"  Video saved ({total//1024//1024}MB): {path}")
+            print(f"  Video saved ({total // 1024 // 1024}MB): {path}")
             return path
         except Exception as e:
             print(f"  Video download failed: {e}")
             return None
 
     def _clean_text(self, html_text: str) -> str:
-        text = re.sub(r'<br\s*/?>', '\n', html_text)
-        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r"<br\s*/?>", "\n", html_text)
+        text = re.sub(r"<[^>]+>", "", text)
         text = unescape(text)
-        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 
     def _extract_image_url(self, block: str) -> str | None:
         bg_match = re.search(
             r'background-image:\s*url\([\'"]?(https://[^\)\'"]+)[\'"]?\)',
-            block
+            block,
         )
         if bg_match:
             return bg_match.group(1)
-        img_match = re.search(
-            r'<img[^>]+src="(https://[^"]+)"',
-            block
-        )
+        img_match = re.search(r'<img[^>]+src="(https://[^"]+)"', block)
         if img_match:
             return img_match.group(1)
         return None
 
     def _download_image(self, url: str, msg_id: int) -> str | None:
         try:
-            ext = url.split('.')[-1].split('?')[0][:5]
-            if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
-                ext = 'jpg'
+            ext = url.split(".")[-1].split("?")[0][:5]
+            if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
+                ext = "jpg"
             path = f"media/img_{msg_id}.{ext}"
             r = self.session.get(url, timeout=15)
             r.raise_for_status()
-            with open(path, 'wb') as f:
+            with open(path, "wb") as f:
                 f.write(r.content)
             return path
         except Exception:
@@ -102,12 +101,14 @@ class WebParser:
 
                 text_match = re.search(
                     r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>\s*<div',
-                    block, re.DOTALL
+                    block,
+                    re.DOTALL,
                 )
                 if not text_match:
                     text_match = re.search(
                         r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
-                        block, re.DOTALL
+                        block,
+                        re.DOTALL,
                     )
                 raw_text = text_match.group(1) if text_match else ""
                 text = self._clean_text(raw_text)
@@ -121,22 +122,23 @@ class WebParser:
 
                 views = 0
                 views_match = re.search(
-                    r'class="tgme_widget_message_views"[^>]*>([^<]+)',
-                    block
+                    r'class="tgme_widget_message_views"[^>]*>([^<]+)', block
                 )
                 if views_match:
                     try:
-                        views = int(re.sub(r'[^\d]', '', views_match.group(1)))
-                    except:
+                        views = int(re.sub(r"[^\d]", "", views_match.group(1)))
+                    except Exception:
                         views = 0
 
-                found.append({
-                    "id": msg_id,
-                    "text": text,
-                    "views": views,
-                    "image_url": image_url,
-                    "video_url": video_url,
-                })
+                found.append(
+                    {
+                        "id": msg_id,
+                        "text": text,
+                        "views": views,
+                        "image_url": image_url,
+                        "video_url": video_url,
+                    }
+                )
             except Exception:
                 continue
 
@@ -163,10 +165,14 @@ class WebParser:
                 media_path = None
                 media_type = "text"
                 if msg["video_url"]:
-                    media_path = self._download_video(msg["video_url"], msg["id"])
+                    media_path = self._download_video(
+                        msg["video_url"], msg["id"]
+                    )
                     media_type = "video" if media_path else "text"
                 elif msg["image_url"]:
-                    media_path = self._download_image(msg["image_url"], msg["id"])
+                    media_path = self._download_image(
+                        msg["image_url"], msg["id"]
+                    )
                     media_type = "photo" if media_path else "text"
                 self.db.save_post(
                     source_channel=channel_username,
@@ -182,17 +188,23 @@ class WebParser:
                 )
                 new_count += 1
 
-            print(f"[WebParser] {channel_username}: +{new_count} новых (из {len(messages)})")
+            print(
+                f"[WebParser] {channel_username}: +{new_count} новых (из {len(messages)})"
+            )
             return new_count
 
         except requests.exceptions.HTTPError as e:
-            print(f"[WebParser] {channel_username}: HTTP {e.response.status_code}")
+            print(
+                f"[WebParser] {channel_username}: HTTP {e.response.status_code}"
+            )
             return 0
         except Exception as e:
             print(f"[WebParser] {channel_username}: {e}")
             return 0
 
-    def parse_all(self, channels: list[str], limit_per_channel: int = 20) -> int:
+    def parse_all(
+        self, channels: list[str], limit_per_channel: int = 20
+    ) -> int:
         total = 0
         for ch in channels:
             ch = ch.strip()
