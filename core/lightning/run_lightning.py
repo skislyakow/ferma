@@ -298,9 +298,9 @@ async def process_news(
             lines = translated.strip().split("\n")
             headline = lines[0].strip()
             if (
-                not headline or
-                len(headline) < 10 or
-                not re.search(
+                not headline
+                or len(headline) < 10
+                or not re.search(
                     r"[a-zA-Z\u0400-\u04FF\u0500-\u052F]", headline
                 )
             ):
@@ -363,9 +363,9 @@ async def process_news(
             )
             print(f"[RE:POST] Published: {headline[:50]}")
             if (
-                vk_copy and
-                media_path is not None and
-                os.path.exists(media_path)
+                vk_copy
+                and media_path is not None
+                and os.path.exists(media_path)
             ):
                 _crosspost_to_vk(media_path, post, cfg, media_type=media_type)
 
@@ -632,8 +632,8 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         continue
 
                     pid = (
-                        entry.get("id", "").split("/")[-1] or
-                        entry.get("link", "").split("/")[-2]
+                        entry.get("id", "").split("/")[-1]
+                        or entry.get("link", "").split("/")[-2]
                     )
                     if pid in seen:
                         continue
@@ -689,8 +689,8 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                                         ext = (
                                             img_url.rsplit(".", 1)[-1].split(
                                                 "?"
-                                            )[0] or
-                                            "jpg"
+                                            )[0]
+                                            or "jpg"
                                         )
                                         fname = f"reddit_{pid}.{ext}"
                                         fpath = os.path.join(MEDIA_DIR, fname)
@@ -776,14 +776,14 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     lines = translated.strip().split("\n")
                     headline = lines[0].strip()
                     if (
-                        not headline or
-                        len(headline) < 10 or
-                        not re.search(
+                        not headline
+                        or len(headline) < 10
+                        or not re.search(
                             r"[a-zA-Z\u0400-\u04FF\u0500-\u052F]", headline
-                        ) or
-                        headline.lower().startswith("reddit") or
-                        re.match(r"^[rR]/\w+$", headline) or
-                        "reddit:" in headline.lower()
+                        )
+                        or headline.lower().startswith("reddit")
+                        or re.match(r"^[rR]/\w+$", headline)
+                        or "reddit:" in headline.lower()
                     ):
                         if media_path:
                             headline = "Кадр дня"
@@ -835,9 +835,9 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         )
                         print(f"[REDDIT] Published: {headline[:50]}")
                     if (
-                        vk_copy and
-                        media_path is not None and
-                        os.path.exists(media_path)
+                        vk_copy
+                        and media_path is not None
+                        and os.path.exists(media_path)
                     ):
                         _crosspost_to_vk(
                             media_path,
@@ -1013,9 +1013,9 @@ if __name__ == "__main__":
         code = None
         for i, a in enumerate(sys.argv):
             if (
-                a == "--auth" and
-                i + 1 < len(sys.argv) and
-                not sys.argv[i + 1].startswith("-")
+                a == "--auth"
+                and i + 1 < len(sys.argv)
+                and not sys.argv[i + 1].startswith("-")
             ):
                 code = sys.argv[i + 1]
                 break
