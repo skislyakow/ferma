@@ -66,21 +66,27 @@ class VKPoster:
         upload_data = self._call("photos.getWallUploadServer", {"group_id": self.group_id})
         upload_url = upload_data["upload_url"]
 
-        try:
-            resp = requests.post(
-                upload_url,
-                files={"photo": ("photo.jpg", upload_bytes, "image/jpeg")},
-                timeout=60,
-            )
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"VK photo upload failed: {e}")
-        try:
-            raw = resp.json()
-        except ValueError:
-            raise Exception(f"VK upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
+        raw = None
+        for attempt in range(3):
+            try:
+                resp = requests.post(
+                    upload_url,
+                    files={"photo": ("photo.jpg", upload_bytes, "image/jpeg")},
+                    timeout=60,
+                )
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"VK photo upload failed: {e}")
+            try:
+                raw = resp.json()
+            except ValueError:
+                raise Exception(f"VK upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
+            if raw.get("photo") and raw["photo"] not in ("[]", "{}", ""):
+                break
+            print(f"[VK] Photo upload rejected (attempt {attempt+1}/3): {raw}")
+            time.sleep(5 * (attempt + 1))
 
         if not raw.get("photo") or raw["photo"] in ("[]", "{}", ""):
-            raise Exception(f"VK photo upload rejected file (server response: {raw})")
+            raise Exception(f"VK photo upload rejected file after retries (server response: {raw})")
 
         saved = self._call("photos.saveWallPhoto", {
             "group_id": self.group_id,
