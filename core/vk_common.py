@@ -74,28 +74,79 @@ def fetch_entries(subreddit, name="VK"):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             r = requests.get(url, headers=headers, timeout=15)
+            if r.status_code == 429:
+                backoff = 30 * (attempt + 1)
+                print(
+                    f"[{name}] RSS returned 429 (attempt {attempt + 1}/4), retrying in {backoff}s"
+                )
+                time.sleep(backoff)
+                continue
             if r.status_code != 200:
                 print(
-                    f"[{name}] RSS returned {r.status_code} (attempt {attempt + 1}/3)"
+                    f"[{name}] RSS returned {r.status_code} (attempt {attempt + 1}/4)"
                 )
-                if attempt < 2:
+                if attempt < 3:
                     time.sleep(30)
                 continue
             feed = feedparser.parse(r.text)
             if feed.entries:
                 return feed.entries
             print(
-                f"[{name}] RSS empty (attempt {attempt + 1}/3), retrying in 30s..."
+                f"[{name}] RSS empty (attempt {attempt + 1}/4), retrying in 30s..."
             )
             time.sleep(30)
         except Exception as e:
-            print(f"[{name}] RSS fetch failed: {e} (attempt {attempt + 1}/3)")
-            if attempt < 2:
+            print(f"[{name}] RSS fetch failed: {e} (attempt {attempt + 1}/4)")
+            if attempt < 3:
                 time.sleep(30)
-    return []
+    return fetch_entries_json(subreddit, name)
+
+
+def fetch_entries_json(subreddit, name="VK"):
+    url = f"https://www.reddit.com/r/{subreddit}/new.json?limit=10"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            print(f"[{name}] Reddit JSON feed returned {r.status_code}")
+            return []
+        data = r.json()
+        children = data.get("data", {}).get("children", [])
+        entries = []
+        for child in children:
+            d = child.get("data") or {}
+            if not d.get("title") or d.get("over_18"):
+                continue
+            link = d.get("permalink", "")
+            if link.startswith("/"):
+                link = "https://www.reddit.com" + link
+            summary_parts = []
+            preview = d.get("preview", {}).get("images", [])
+            if preview:
+                src = preview[0].get("source", {}).get("url", "")
+                if src:
+                    summary_parts.append(f'<img src="{src}">')
+            if d.get("is_video") and d.get("id"):
+                summary_parts.append(
+                    f'<a href="https://v.redd.it/{d["id"]}">video</a>'
+                )
+            entries.append({
+                "id": d.get("id", ""),
+                "link": link,
+                "title": d.get("title", ""),
+                "summary": "".join(summary_parts),
+            })
+        if entries:
+            print(f"[{name}] JSON feed: {len(entries)} entries")
+        return entries
+    except Exception as e:
+        print(f"[{name}] Reddit JSON feed failed: {e}")
+        return []
 
 
 def _normalize_image_url(url: str) -> str:
