@@ -1,6 +1,8 @@
 import os
 import time
+import io
 import requests
+from PIL import Image
 
 VK_API = "https://api.vk.com/method"
 RETRYABLE_CODES = {6, 9, 10}
@@ -42,23 +44,40 @@ class VKPoster:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Photo not found: {file_path}")
 
+        with open(file_path, "rb") as f:
+            raw_bytes = f.read()
+
+        if len(raw_bytes) < 100:
+            raise Exception(f"VK photo too small ({len(raw_bytes)} bytes): {file_path}")
+
+        try:
+            img = Image.open(io.BytesIO(raw_bytes))
+            img.load()
+        except Exception as e:
+            raise Exception(f"VK photo not decodable by PIL: {e} ({file_path})")
+
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=92)
+        buf.seek(0)
+        upload_bytes = buf.getvalue()
+
         upload_data = self._call("photos.getWallUploadServer", {"group_id": self.group_id})
         upload_url = upload_data["upload_url"]
 
-        filename = os.path.basename(file_path)
-        with open(file_path, "rb") as f:
-            try:
-                resp = requests.post(
-                    upload_url,
-                    files={"photo": (filename, f, "image/jpeg")},
-                    timeout=60,
-                )
-            except requests.exceptions.RequestException as e:
-                raise Exception(f"VK photo upload failed: {e}")
-            try:
-                raw = resp.json()
-            except ValueError:
-                raise Exception(f"VK upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
+        try:
+            resp = requests.post(
+                upload_url,
+                files={"photo": ("photo.jpg", upload_bytes, "image/jpeg")},
+                timeout=60,
+            )
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"VK photo upload failed: {e}")
+        try:
+            raw = resp.json()
+        except ValueError:
+            raise Exception(f"VK upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
 
         if not raw.get("photo") or raw["photo"] in ("[]", "{}", ""):
             raise Exception(f"VK photo upload rejected file (server response: {raw})")
