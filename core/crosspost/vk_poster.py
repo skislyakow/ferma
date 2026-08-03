@@ -20,7 +20,10 @@ class VKPoster:
             "access_token": self.token,
             "v": self.api_v,
         })
-        resp = requests.post(f"{VK_API}/{method}", data=params, timeout=30)
+        try:
+            resp = requests.post(f"{VK_API}/{method}", data=params, timeout=30)
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"VK API request failed: {e}")
         try:
             data = resp.json()
         except ValueError:
@@ -39,38 +42,14 @@ class VKPoster:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Photo not found: {file_path}")
 
-        try:
-            return self._upload_photo_via_stories(file_path)
-        except Exception:
-            return self._upload_photo_via_wall(file_path)
-
-    def _upload_photo_via_stories(self, file_path: str) -> str:
-        upload_data = self._call("stories.getPhotoUploadServer", {
-            "group_id": self.group_id,
-            "add_to_news": 1,
-        })
-        upload_url = upload_data["upload_url"]
-
-        with open(file_path, "rb") as f:
-            resp = requests.post(upload_url, files={"photo": f}, timeout=60)
-            try:
-                raw = resp.json()
-            except ValueError:
-                raise Exception(f"VK upload returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}")
-
-        upload_result = raw["response"]["upload_result"]
-        saved = self._call("stories.save", {"upload_results": upload_result})
-        story = saved["items"][0]
-        photo = story["photo"]
-
-        return f"photo{photo['owner_id']}_{photo['id']}"
-
-    def _upload_photo_via_wall(self, file_path: str) -> str:
         upload_data = self._call("photos.getWallUploadServer", {"group_id": self.group_id})
         upload_url = upload_data["upload_url"]
 
         with open(file_path, "rb") as f:
-            resp = requests.post(upload_url, files={"photo": f}, timeout=60)
+            try:
+                resp = requests.post(upload_url, files={"photo": f}, timeout=60)
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"VK photo upload failed: {e}")
             try:
                 raw = resp.json()
             except ValueError:
@@ -104,10 +83,13 @@ class VKPoster:
             "name": title or "Video",
             "wallpost": 0,
         })
-        upload_url = save_data["upload_url"]  # type: ignore[index]
+        upload_url = save_data["upload_url"]
 
         with open(file_path, "rb") as f:
-            resp = requests.post(upload_url, files={"video_file": f}, timeout=120)
+            try:
+                resp = requests.post(upload_url, files={"video_file": f}, timeout=120)
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"VK video upload failed: {e}")
             try:
                 result = resp.json()
             except ValueError:

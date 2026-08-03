@@ -7,6 +7,7 @@ Usage:
   2) Complete auth:    python core/lightning/run_lightning.py channels/repost/.env --auth 12345
   3) Run:              python core/lightning/run_lightning.py channels/repost/.env
 """
+
 import os
 import sys
 import zlib
@@ -15,41 +16,74 @@ import asyncio
 import shutil
 import traceback
 
-from dotenv import dotenv_values
+sys.path.insert(
+    0,
+    os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ),
+)
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
+from dotenv import dotenv_values  # noqa: E402
 from core.config import load_channel_config  # noqa: E402
 from core.lightning.collector import LightningCollector  # noqa: E402
 from core.translator.translator import Translator  # noqa: E402
 from core.publisher.publisher import Publisher  # noqa: E402
 from core.db.database import Database  # noqa: E402
 from core.filter.manage import load_filters  # noqa: E402
-from core.crosspost.vk_poster import VKPoster
+from core.crosspost.vk_poster import VKPoster  # noqa: E402
+from core.vk_common import download_reddit_video  # noqa: E402
 
 BREAKING_KEYWORDS = [
-    "breaking", "just in", "alert", "update", "developing",
-    "confirmed", "report", "announce", "happening now",
-    "exclusive", "urgent", "flash",
-    "срочно", "эксклюзив", "важно", "подтверждено",
-    "сообщает", "объявляет", "происходит", "внимание",
-    "🚨", "🔴", "⚠️", "‼️",
+    "breaking",
+    "just in",
+    "alert",
+    "update",
+    "developing",
+    "confirmed",
+    "report",
+    "announce",
+    "happening now",
+    "exclusive",
+    "urgent",
+    "flash",
+    "срочно",
+    "эксклюзив",
+    "важно",
+    "подтверждено",
+    "сообщает",
+    "объявляет",
+    "происходит",
+    "внимание",
+    "🚨",
+    "🔴",
+    "⚠️",
+    "‼️",
 ]
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REPOST_BANNER = os.path.join(PROJECT_ROOT, "repost2.png")
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 SESSION_FILE = "repost.session"
 MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
-VK_TRACKER_PATH = os.path.join(PROJECT_ROOT, "channels", "repost", "vk_posted.json")
+VK_TRACKER_PATH = os.path.join(
+    PROJECT_ROOT, "channels", "repost", "vk_posted.json"
+)
 
 
-def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: str = VK_TRACKER_PATH, media_type: str = "photo"):
+def _crosspost_to_vk(
+    media_path: str,
+    post_text: str,
+    cfg: dict,
+    tracker_path: str = VK_TRACKER_PATH,
+    media_type: str = "photo",
+):
     if not cfg.get("VK_TOKEN") or not cfg.get("VK_GROUP_ID"):
         return
-    if not media_path or media_path == REPOST_BANNER:
+    if not media_path:
         return
     try:
         import json
+
         posted = set()
         if os.path.exists(tracker_path):
             with open(tracker_path) as f:
@@ -59,7 +93,10 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
             return
         vk = VKPoster(cfg["VK_TOKEN"], cfg["VK_GROUP_ID"])
         if media_type == "video":
-            attach = vk.upload_video(media_path, title=os.path.splitext(os.path.basename(media_path))[0])
+            attach = vk.upload_video(
+                media_path,
+                title=os.path.splitext(os.path.basename(media_path))[0],
+            )
         else:
             attach = vk.upload_photo(media_path)
         vk_text = strip_html(post_text)
@@ -77,7 +114,10 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
         vk.post_to_wall(message=vk_text, attachment=attach)
         posted.add(post_key)
         import tempfile
-        tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(tracker_path), suffix=".tmp")
+
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=os.path.dirname(tracker_path), suffix=".tmp"
+        )
         try:
             with os.fdopen(tmp_fd, "w") as f:
                 json.dump(list(posted), f)
@@ -92,7 +132,7 @@ def _crosspost_to_vk(media_path: str, post_text: str, cfg: dict, tracker_path: s
 
 
 def _vk_prepare_copy(media_path, cfg):
-    if cfg.get("VK_TOKEN") and media_path and media_path != REPOST_BANNER:
+    if cfg.get("VK_TOKEN") and media_path:
         cp = media_path + ".vktmp"
         shutil.copy2(media_path, cp)
         return cp
@@ -121,7 +161,7 @@ def has_breaking_keyword(text: str) -> bool:
 
 
 def is_russian(text: str) -> bool:
-    return bool(re.search(r'[\u0400-\u04FF]', text))
+    return bool(re.search(r"[\u0400-\u04FF]", text))
 
 
 def _repost_link(target_channel: str) -> str:
@@ -130,21 +170,30 @@ def _repost_link(target_channel: str) -> str:
 
 
 def format_post(headline: str, body: str, target_channel: str = "") -> str:
-    headline = re.sub(r'\s+', ' ', headline).strip()
-    body = re.sub(r'\n{3,}', '\n\n', body).strip()
+    headline = re.sub(r"\s+", " ", headline).strip()
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()
     parts = [f"👉 {headline}"]
     if body:
         parts.append(body)
     parts.append("")
-    parts.append(_repost_link(target_channel) if target_channel else "⚡️ RE:POST")
+    parts.append(
+        _repost_link(target_channel) if target_channel else "⚡️ RE:POST"
+    )
     return "\n".join(parts)
 
 
 AD_BLOCKLIST = [
-    "news app", "follow news", "match your interests",
-    "download the app", "download our app", "get the app",
-    "available on", "subscribe for", "sign up",
-    "оккупированн", "окуппированн",
+    "news app",
+    "follow news",
+    "match your interests",
+    "download the app",
+    "download our app",
+    "get the app",
+    "available on",
+    "subscribe for",
+    "sign up",
+    "оккупированн",
+    "окуппированн",
 ]
 
 SOURCE_FOOTER_PATTERNS = [
@@ -164,15 +213,16 @@ SOURCE_FOOTER_PATTERNS = [
 
 def strip_html(text: str) -> str:
     import html
-    text = re.sub(r'<[^>]+>', '', text)
+
+    text = re.sub(r"<[^>]+>", "", text)
     text = html.unescape(text)
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
 def clean_source_footer(text: str) -> str:
     for pat in SOURCE_FOOTER_PATTERNS:
-        text = re.sub(pat, '', text, flags=re.IGNORECASE)
+        text = re.sub(pat, "", text, flags=re.IGNORECASE)
     return text.strip()
 
 
@@ -188,123 +238,148 @@ def is_blocked_content(text: str) -> bool:
     return False
 
 
-async def process_news(source_channel: str, source_msg_id: int, text: str,
-                       translator, pub, db, cfg, media_path=None, media_type="photo"):
+async def process_news(
+    source_channel: str,
+    source_msg_id: int,
+    text: str,
+    translator,
+    pub,
+    db,
+    cfg,
+    media_path: str | None = None,
+    media_type="photo",
+):
     """Shared pipeline: filter → translate → format → publish → save."""
     is_media_only = False
     post = None
+    vk_copy = None
+    try:
+        if not text and not media_path:
+            return False
 
-    if not text and not media_path:
-        return False
+        if text:
+            text = strip_html(text)
 
-    if text:
-        text = strip_html(text)
-
-    if db.post_exists(source_channel, source_msg_id):
-        print(f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}")
-        _cleanup_media(media_path)
-        return False
-    if text and db.content_exists(text):
-        print(f"[RE:POST] Duplicate content (hash match)")
-        _cleanup_media(media_path)
-        return False
-
-    if text and has_breaking_keyword(text):
-        if is_blocked_content(text):
-            print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
+        if db.post_exists(source_channel, source_msg_id):
+            print(
+                f"[RE:POST] Duplicate #{source_msg_id} from {source_channel}"
+            )
+            _cleanup_media(media_path)
+            return False
+        if text and db.content_exists(text):
+            print("[RE:POST] Duplicate content (hash match)")
             _cleanup_media(media_path)
             return False
 
-        print(f"[RE:POST] >> {text[:80]}...")
-
-        if is_russian(text):
-            translated = text
-        else:
-            translated = translator.translate(text)
-            if not translated:
-                print(f"[RE:POST] Translation failed")
+        if text and has_breaking_keyword(text):
+            if is_blocked_content(text):
+                print(f"[RE:POST] Blocked (ad/promo): {text[:60]}...")
                 _cleanup_media(media_path)
                 return False
 
-        translated = clean_source_footer(translated)
+            print(f"[RE:POST] >> {text[:80]}...")
 
-        if not translated.strip():
-            print(f"[RE:POST] Empty after footer cleaning, skipping")
+            if is_russian(text):
+                translated = text
+            else:
+                translated = translator.translate(text)
+                if not translated:
+                    print("[RE:POST] Translation failed")
+                    _cleanup_media(media_path)
+                    return False
+
+            translated = clean_source_footer(translated)
+
+            if not translated.strip():
+                print("[RE:POST] Empty after footer cleaning, skipping")
+                _cleanup_media(media_path)
+                return False
+
+            lines = translated.strip().split("\n")
+            headline = lines[0].strip()
+            if (
+                not headline
+                or len(headline) < 10
+                or not re.search(
+                    r"[a-zA-Z\u0400-\u04FF\u0500-\u052F]", headline
+                )
+            ):
+                if media_path:
+                    is_media_only = True
+                else:
+                    print("[RE:POST] Empty/useless headline, skipping")
+                    return False
+            body = "\n".join(lines[1:])
+            if not is_media_only:
+                post = format_post(headline, body, cfg["TARGET_CHANNEL"])
+        elif media_path:
+            is_media_only = True
+
+        if is_media_only:
+            post = f"👉 Кадр дня\n\n{_repost_link(cfg['TARGET_CHANNEL'])} - {source_channel}"
+            headline = "Кадр дня"
+
+        has_media = 1 if media_path else 0
+
+        vk_copy = _vk_prepare_copy(media_path, cfg)
+
+        if post is None:
+            print(f"[RE:POST] No content to publish from {source_channel}")
+            if vk_copy:
+                _vk_cleanup(vk_copy)
             _cleanup_media(media_path)
             return False
 
-        lines = translated.strip().split("\n")
-        headline = lines[0].strip()
-        if not headline or len(headline) < 10 or not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', headline):
-            if media_path:
-                is_media_only = True
-            else:
-                print(f"[RE:POST] Empty/useless headline, skipping")
-                return False
-        body = "\n".join(lines[1:])
-        if not is_media_only:
-            post = format_post(headline, body, cfg["TARGET_CHANNEL"])
-    elif media_path:
-        is_media_only = True
+        total_published = db.get_stats()["published"]
 
-    if is_media_only:
-        post = f'👉 Кадр дня\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
-        headline = "Кадр дня"
+        if vk_copy:
+            pub_media = vk_copy
+        elif media_path:
+            pub_media = media_path
+        else:
+            pub_media = None
 
-    has_media = 1 if media_path else 0
+        success = pub.publish(
+            text=post,
+            chat_id=cfg["TARGET_CHANNEL"],
+            total_published=total_published,
+            cpa_links=cfg["CPA_LINKS"],
+            cpa_every=cfg["CPA_INSERT_EVERY"],
+            media_path=pub_media,
+            media_type=media_type,
+            parse_mode="HTML",
+        )
 
-    vk_copy = _vk_prepare_copy(media_path, cfg)
+        if success:
+            total_published += 1
+            db.save_post(
+                source_channel=source_channel,
+                source_message_id=source_msg_id,
+                text=text,
+                views=0,
+                reactions_count=0,
+                has_media=has_media,
+                published=1,
+            )
+            print(f"[RE:POST] Published: {headline[:50]}")
+            if (
+                vk_copy
+                and media_path is not None
+                and os.path.exists(media_path)
+            ):
+                _crosspost_to_vk(media_path, post, cfg, media_type=media_type)
 
-    if post is None:
-        print(f"[RE:POST] No content to publish from {source_channel}")
+        if vk_copy:
+            _vk_cleanup(vk_copy)
+        _cleanup_media(media_path)
+        return success
+    except Exception as e:
+        print(f"[RE:POST] process_news error: {e}")
+        traceback.print_exc()
         if vk_copy:
             _vk_cleanup(vk_copy)
         _cleanup_media(media_path)
         return False
-
-    total_published = db.get_stats()["published"]
-
-    if vk_copy:
-        pub_media = vk_copy
-    elif media_path:
-        pub_media = media_path
-    elif os.path.exists(REPOST_BANNER):
-        pub_media = os.path.join(MEDIA_DIR, "banner_fallback.jpg")
-        shutil.copy2(REPOST_BANNER, pub_media)
-        media_type = "photo"
-    else:
-        pub_media = None
-
-    success = pub.publish(
-        text=post,
-        chat_id=cfg["TARGET_CHANNEL"],
-        total_published=total_published,
-        cpa_links=cfg["CPA_LINKS"],
-        cpa_every=cfg["CPA_INSERT_EVERY"],
-        media_path=pub_media,
-        media_type=media_type,
-        parse_mode="HTML",
-    )
-
-    if success:
-        total_published += 1
-        db.save_post(
-            source_channel=source_channel,
-            source_message_id=source_msg_id,
-            text=text,
-            views=0,
-            reactions_count=0,
-            has_media=has_media,
-            published=1,
-        )
-        print(f"[RE:POST] Published: {headline[:50]}")
-        if vk_copy and os.path.exists(media_path):
-            _crosspost_to_vk(media_path, post, cfg, media_type=media_type)
-
-    if vk_copy:
-        _vk_cleanup(vk_copy)
-    _cleanup_media(media_path)
-    return success
 
 
 async def auth_once(env_path: str, code: str | None = None):
@@ -312,6 +387,7 @@ async def auth_once(env_path: str, code: str | None = None):
     os.chdir(channel_dir)
     cfg = load_channel_config(env_path)
     from telethon import TelegramClient
+
     client = TelegramClient(SESSION_FILE, cfg["API_ID"], cfg["API_HASH"])
     await client.connect()
 
@@ -324,7 +400,9 @@ async def auth_once(env_path: str, code: str | None = None):
             return
         with open(state_path) as f:
             phone_code_hash = f.read().strip()
-        await client.sign_in(phone=cfg["PHONE"], code=code, phone_code_hash=phone_code_hash)
+        await client.sign_in(
+            phone=cfg["PHONE"], code=code, phone_code_hash=phone_code_hash
+        )
         os.remove(state_path)
         print("[RE:POST] Auth successful, session saved")
     else:
@@ -332,8 +410,8 @@ async def auth_once(env_path: str, code: str | None = None):
         with open(".auth_state", "w") as f:
             f.write(sent.phone_code_hash)
         print(f"[RE:POST] Code sent to {cfg['PHONE']}")
-        print(f"[RE:POST] Run --auth <code> to complete")
-    await client.disconnect()
+        print("[RE:POST] Run --auth <code> to complete")
+    await client.disconnect()  # type: ignore[arg-type]
 
 
 async def rss_poller(feed_urls, cfg, translator, pub, db):
@@ -366,8 +444,15 @@ async def rss_poller(feed_urls, cfg, translator, pub, db):
 
                     seen.add(link)
                     msg_id = zlib.crc32(link.encode()) & 0x7FFFFFFF
-                    await process_news(f"rss:{url.split('/')[2]}", msg_id, text,
-                                       translator, pub, db, cfg)
+                    await process_news(
+                        f"rss:{url.split('/')[2]}",
+                        msg_id,
+                        text,
+                        translator,
+                        pub,
+                        db,
+                        cfg,
+                    )
 
             except Exception as e:
                 print(f"[RSS] Error: {e}")
@@ -405,23 +490,29 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
 
             if text:
                 text = text.strip()
-                text = re.sub(r'(\n@\w+)+$', '', text)
-                text = re.sub(r'[\u200b\u200c\u200d\ufeff\u00a0]', '', text)
+                text = re.sub(r"(\n@\w+)+$", "", text)
+                text = re.sub(r"[\u200b\u200c\u200d\ufeff\u00a0]", "", text)
 
             if text and len(text) < 40:
                 if media_path:
                     text = ""
                 else:
-                    print(f"[RU] Too short ({len(text)} chars) from {source_channel}, skipping")
+                    print(
+                        f"[RU] Too short ({len(text)} chars) from {source_channel}, skipping"
+                    )
                     db.mark_skipped(post_id)
                     await asyncio.sleep(300)
                     continue
 
-            if text and not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', text):
+            if text and not re.search(
+                r"[a-zA-Z\u0400-\u04FF\u0500-\u052F]", text
+            ):
                 if media_path:
                     text = ""
                 else:
-                    print(f"[RU] No visible text from {source_channel}, skipping")
+                    print(
+                        f"[RU] No visible text from {source_channel}, skipping"
+                    )
                     db.mark_skipped(post_id)
                     await asyncio.sleep(300)
                     continue
@@ -439,15 +530,15 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                     continue
 
             if text:
-                post_text = f'{text}\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
+                post_text = f"{text}\n\n{_repost_link(cfg['TARGET_CHANNEL'])} - {source_channel}"
             else:
-                post_text = f'👉 Кадр дня\n\n{_repost_link(cfg["TARGET_CHANNEL"])} - {source_channel}'
+                post_text = f"👉 Кадр дня\n\n{_repost_link(cfg['TARGET_CHANNEL'])} - {source_channel}"
 
             # Use fallback image if no media
             m_path, m_type = media_path, media_type or "photo"
             vk_copy = _vk_prepare_copy(m_path, cfg)
             if not m_path:
-                m_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
+                m_path = None
                 m_type = "photo"
 
             total_published = db.get_stats()["published"]
@@ -468,7 +559,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
                 total_published += 1
                 db.mark_published(post_id)
                 print(f"[RU] Published from {source_channel}: {text[:50]}...")
-                if vk_copy and os.path.exists(m_path):
+                if vk_copy and m_path is not None and os.path.exists(m_path):
                     _crosspost_to_vk(m_path, post_text, cfg, media_type=m_type)
 
             if vk_copy:
@@ -493,95 +584,6 @@ def _detect_reddit_video(summary):
     return None
 
 
-def _download_reddit_video(video_url, filename):
-    import requests as _req
-    try:
-        video_id = video_url.rstrip("/").split("/")[-1]
-        manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
-        r = _req.get(manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-        if r.status_code != 200:
-            print(f"[REDDIT] DASH manifest {r.status_code}")
-            return None
-
-        text = r.text
-        has_audio = 'contentType="audio"' in text
-
-        video_rep = re.findall(
-            r'<Representation[^>]+bandwidth="(\d+)"[^>]+height="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
-            text, re.DOTALL
-        )
-        if not video_rep:
-            print("[REDDIT] No video representations found")
-            return None
-
-        best = max(video_rep, key=lambda x: int(x[1]))
-        video_base = best[2]
-        video_height = best[1]
-
-        audio_base = None
-        if has_audio:
-            audio_section = text[text.index('contentType="audio"'):]
-            audio_rep = re.findall(
-                r'<Representation[^>]+bandwidth="(\d+)"[^>]*>.*?<BaseURL>([^<]+)</BaseURL>',
-                audio_section, re.DOTALL
-            )
-            if audio_rep:
-                best_audio = max(audio_rep, key=lambda x: int(x[0]))
-                audio_base = best_audio[1]
-
-        os.makedirs(MEDIA_DIR, exist_ok=True)
-        merged = os.path.join(MEDIA_DIR, f"{filename}.mp4")
-
-        url = f"https://v.redd.it/{video_id}/{video_base}"
-        vr = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
-        vr.raise_for_status()
-        video_file = os.path.join(MEDIA_DIR, f"{filename}_video.mp4")
-        with open(video_file, "wb") as f:
-            for chunk in vr.iter_content(8192):
-                f.write(chunk)
-
-        audio_file = None
-        if audio_base:
-            url = f"https://v.redd.it/{video_id}/{audio_base}"
-            ar = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True)
-            ar.raise_for_status()
-            audio_file = os.path.join(MEDIA_DIR, f"{filename}_audio.mp4")
-            with open(audio_file, "wb") as f:
-                for chunk in ar.iter_content(8192):
-                    f.write(chunk)
-
-        if video_file and audio_file:
-            import subprocess
-            result = subprocess.run(
-                ["ffmpeg", "-y", "-i", video_file, "-i", audio_file,
-                 "-c:v", "copy", "-c:a", "aac", "-strict", "experimental", merged],
-                capture_output=True, timeout=60
-            )
-            if result.returncode == 0:
-                os.remove(video_file)
-                os.remove(audio_file)
-                print(f"[REDDIT] Merged {video_height}p video + audio")
-                return merged
-            else:
-                print(f"[REDDIT] ffmpeg merge failed: {result.stderr[:200]}")
-
-        if video_file:
-            os.rename(video_file, merged)
-            if audio_file and os.path.exists(audio_file):
-                os.remove(audio_file)
-            print(f"[REDDIT] Downloaded {video_height}p video (no audio)")
-            return merged
-
-        return None
-    except Exception as e:
-        for f in [video_file, audio_file, merged]:
-            if f and os.path.exists(f):
-                try: os.remove(f)
-                except OSError: pass
-        print(f"[Reddit Poll] Video download failed: {e}")
-        return None
-
-
 async def reddit_poller(subreddits, cfg, translator, pub, db):
     import feedparser
     import time
@@ -596,7 +598,9 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
     def fetch_entries(sub):
         url = f"https://www.reddit.com/r/{sub}/new/.rss"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
         feed = feedparser.parse(url, agent=headers["User-Agent"])
         return feed.entries
 
@@ -609,7 +613,9 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
                 newest_ts = 0
                 for e in entries:
-                    ts = int(time.mktime(e.get("published_parsed", time.gmtime(0))))
+                    ts = int(
+                        time.mktime(e.get("published_parsed", time.gmtime(0)))
+                    )
                     newest_ts = max(newest_ts, ts)
 
                 prev_ts = last_ts.get(sub, 0)
@@ -617,11 +623,18 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     continue
 
                 for entry in reversed(entries):
-                    ts = int(time.mktime(entry.get("published_parsed", time.gmtime(0))))
+                    ts = int(
+                        time.mktime(
+                            entry.get("published_parsed", time.gmtime(0))
+                        )
+                    )
                     if prev_ts and ts <= prev_ts:
                         continue
 
-                    pid = entry.get("id", "").split("/")[-1] or entry.get("link", "").split("/")[-2]
+                    pid = (
+                        entry.get("id", "").split("/")[-1]
+                        or entry.get("link", "").split("/")[-2]
+                    )
                     if pid in seen:
                         continue
                     seen.add(pid)
@@ -637,13 +650,21 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     media_path = None
                     media_type = "photo"
                     try:
-                        import re as _re, html as _html
+                        import re as _re
+                        import html as _html
+
                         _src = summary or desc or ""
 
                         # Try video first (v.redd.it)
                         video_url = _detect_reddit_video(_src)
                         if video_url:
-                            media_path = await asyncio.to_thread(_download_reddit_video, video_url, f"reddit_{pid}")
+                            media_path = await asyncio.to_thread(
+                                download_reddit_video,
+                                video_url,
+                                f"reddit_{pid}",
+                                MEDIA_DIR,
+                                "REDDIT",
+                            )
                             if media_path:
                                 media_type = "video"
 
@@ -651,19 +672,33 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                         if not media_path:
                             _m = _re.search(r'<img[^>]+src="([^"]+)"', _src)
                             if _m:
-                                img_url = _html.unescape(_m.group(1)).replace("external-i.redd.it", "i.redd.it")
+                                img_url = _html.unescape(_m.group(1)).replace(
+                                    "external-i.redd.it", "i.redd.it"
+                                )
+
                                 def _dl():
                                     import requests as _req
-                                    r = _req.get(img_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+
+                                    r = _req.get(
+                                        img_url,
+                                        timeout=15,
+                                        headers={"User-Agent": "Mozilla/5.0"},
+                                    )
                                     if r.status_code == 200:
                                         os.makedirs(MEDIA_DIR, exist_ok=True)
-                                        ext = img_url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
+                                        ext = (
+                                            img_url.rsplit(".", 1)[-1].split(
+                                                "?"
+                                            )[0]
+                                            or "jpg"
+                                        )
                                         fname = f"reddit_{pid}.{ext}"
                                         fpath = os.path.join(MEDIA_DIR, fname)
                                         with open(fpath, "wb") as f:
                                             f.write(r.content)
                                         return fpath
                                     return None
+
                                 media_path = await asyncio.to_thread(_dl)
                     except Exception as e:
                         print(f"[REDDIT] Media download failed: {e}")
@@ -674,25 +709,36 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     if body:
                         text = f"{title}\n\n{body}"
                     text = strip_html(text)
-                    text = re.sub(r'(?:\b(?:submitted|posted|published|provided|sent|by)\s+(?:by\s+)?/?u/\S+|comments?\s*(?:share|save|report)?)\s*', '', text, flags=re.IGNORECASE).strip()
-                    text = re.sub(r'\s*\[link\]\s*\[\]\s*', '', text).strip()
-                    text = re.sub(r'\s*\(paywall\)\s*', '', text, flags=re.IGNORECASE).strip()
-                    text = re.sub(r'\s{2,}', ' ', text).strip()
+                    text = re.sub(
+                        r"(?:\b(?:submitted|posted|published|provided|sent|by)\s+(?:by\s+)?/?u/\S+|comments?\s*(?:share|save|report)?)\s*",
+                        "",
+                        text,
+                        flags=re.IGNORECASE,
+                    ).strip()
+                    text = re.sub(r"\s*\[link\]\s*\[\]\s*", "", text).strip()
+                    text = re.sub(
+                        r"\s*\(paywall\)\s*", "", text, flags=re.IGNORECASE
+                    ).strip()
+                    text = re.sub(r"\s{2,}", " ", text).strip()
 
                     if not text:
                         continue
 
                     # Skip posts that are just bare URLs with no meaningful text
-                    _no_urls = re.sub(r'https?://\S+', '', text).strip()
-                    if not _no_urls or re.match(r'^[\s\.,!?;:\-–—()\[\]"\'""«»…]+$', _no_urls):
+                    _no_urls = re.sub(r"https?://\S+", "", text).strip()
+                    if not _no_urls or re.match(
+                        r'^[\s\.,!?;:\-–—()\[\]"\'""«»…]+$', _no_urls
+                    ):
                         print(f"[REDDIT] Skip r/{sub}: only URL, no content")
                         continue
 
-                    source_channel = f'reddit/r/{sub}'
+                    source_channel = f"reddit/r/{sub}"
                     source_msg_id = zlib.crc32(pid.encode()) & 0x7FFFFFFF
 
                     if db.message_id_exists(source_msg_id):
-                        print(f"[REDDIT] Skip dup source_message_id={source_msg_id}")
+                        print(
+                            f"[REDDIT] Skip dup source_message_id={source_msg_id}"
+                        )
                         continue
                     if db.post_exists(source_channel, source_msg_id):
                         continue
@@ -709,12 +755,17 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                     else:
                         translated = translator.translate(text)
                         if not translated:
-                            print(f"[REDDIT] Translation failed")
+                            print("[REDDIT] Translation failed")
                             continue
 
                     translated = clean_source_footer(translated)
-                    translated = re.sub(r'(?:(?:представленн[ыо][ейм]|опубликован[оа]|отправлен[оа]|предоставленн[ыо][ейм]|по данным)\s+\S+|\[ссылка\]\s*\[\])\s*', '', translated, flags=re.IGNORECASE).strip()
-                    translated = re.sub(r'\s{2,}', ' ', translated).strip()
+                    translated = re.sub(
+                        r"(?:(?:представленн[ыо][ейм]|опубликован[оа]|отправлен[оа]|предоставленн[ыо][ейм]|по данным)\s+\S+|\[ссылка\]\s*\[\])\s*",
+                        "",
+                        translated,
+                        flags=re.IGNORECASE,
+                    ).strip()
+                    translated = re.sub(r"\s{2,}", " ", translated).strip()
                     if not translated.strip():
                         if media_path:
                             headline = "Кадр дня"
@@ -724,18 +775,28 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
                     lines = translated.strip().split("\n")
                     headline = lines[0].strip()
-                    if not headline or len(headline) < 10 or not re.search(r'[a-zA-Z\u0400-\u04FF\u0500-\u052F]', headline) or headline.lower().startswith('reddit') or re.match(r'^[rR]/\w+$', headline) or 'reddit:' in headline.lower():
+                    if (
+                        not headline
+                        or len(headline) < 10
+                        or not re.search(
+                            r"[a-zA-Z\u0400-\u04FF\u0500-\u052F]", headline
+                        )
+                        or headline.lower().startswith("reddit")
+                        or re.match(r"^[rR]/\w+$", headline)
+                        or "reddit:" in headline.lower()
+                    ):
                         if media_path:
                             headline = "Кадр дня"
                             body = ""
                         else:
-                            print(f"[REDDIT] Empty/useless headline, skipping")
+                            print("[REDDIT] Empty/useless headline, skipping")
                             continue
                     body = "\n".join(lines[1:]).strip()
 
-                    import html as _html
-                    headline = _html.escape(headline)
-                    body = _html.escape(body)
+                    import html as _html2
+
+                    headline = _html2.escape(headline)
+                    body = _html2.escape(body)
 
                     post_text = f"👉 {headline}"
                     if body:
@@ -746,7 +807,7 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
 
                     vk_copy = _vk_prepare_copy(media_path, cfg)
                     if not media_path:
-                        media_path = REPOST_BANNER if os.path.exists(REPOST_BANNER) else None
+                        media_path = None
                         media_type = "photo"
 
                     pub_media = vk_copy if vk_copy else media_path
@@ -773,8 +834,17 @@ async def reddit_poller(subreddits, cfg, translator, pub, db):
                             published=1,
                         )
                         print(f"[REDDIT] Published: {headline[:50]}")
-                        if vk_copy and os.path.exists(media_path):
-                            _crosspost_to_vk(media_path, post_text, cfg, media_type=media_type)
+                    if (
+                        vk_copy
+                        and media_path is not None
+                        and os.path.exists(media_path)
+                    ):
+                        _crosspost_to_vk(
+                            media_path,
+                            post_text,
+                            cfg,
+                            media_type=media_type,
+                        )
 
                     if vk_copy:
                         _vk_cleanup(vk_copy)
@@ -826,7 +896,9 @@ async def main(env_path: str):
             try:
                 os.makedirs(MEDIA_DIR, exist_ok=True)
                 fname = f"repost_{source_msg_id}.jpg"
-                path = await msg.download_media(file=os.path.join(MEDIA_DIR, fname))
+                path = await msg.download_media(
+                    file=os.path.join(MEDIA_DIR, fname)
+                )
                 if path and os.path.exists(path):
                     media_path = path
             except Exception as e:
@@ -835,7 +907,9 @@ async def main(env_path: str):
             try:
                 os.makedirs(MEDIA_DIR, exist_ok=True)
                 fname = f"repost_{source_msg_id}.mp4"
-                path = await msg.download_media(file=os.path.join(MEDIA_DIR, fname))
+                path = await msg.download_media(
+                    file=os.path.join(MEDIA_DIR, fname)
+                )
                 if path and os.path.exists(path):
                     media_path = path
                     media_type = "video"
@@ -845,7 +919,9 @@ async def main(env_path: str):
             try:
                 os.makedirs(MEDIA_DIR, exist_ok=True)
                 fname = f"repost_{source_msg_id}.bin"
-                path = await msg.download_media(file=os.path.join(MEDIA_DIR, fname))
+                path = await msg.download_media(
+                    file=os.path.join(MEDIA_DIR, fname)
+                )
                 if path and os.path.exists(path):
                     media_path = path
             except Exception as e:
@@ -854,9 +930,17 @@ async def main(env_path: str):
         if not text and not media_path:
             return
 
-        await process_news(source_channel, source_msg_id, text,
-                           translator, pub, db, cfg,
-                           media_path=media_path, media_type=media_type)
+        await process_news(
+            source_channel,
+            source_msg_id,
+            text,
+            translator,
+            pub,
+            db,
+            cfg,
+            media_path=media_path,
+            media_type=media_type,
+        )
 
     collector.set_handler(on_telegram)
 
@@ -866,28 +950,56 @@ async def main(env_path: str):
     env_vals = dotenv_values(env_path)
 
     # Parse RSS feeds from .env
-    rss_feeds = [x.strip() for x in (env_vals.get("RSS_FEEDS") or "").split(",") if x.strip()]
+    rss_feeds = [
+        x.strip()
+        for x in (env_vals.get("RSS_FEEDS") or "").split(",")
+        if x.strip()
+    ]
 
     # Parse Russian source channels from .env
-    ru_channels = [x.strip() for x in (env_vals.get("RU_SOURCE_CHANNELS") or "").split(",") if x.strip()]
+    ru_channels = [
+        x.strip()
+        for x in (env_vals.get("RU_SOURCE_CHANNELS") or "").split(",")
+        if x.strip()
+    ]
 
     # Parse Reddit subreddits from .env
-    reddit_subs = [x.strip() for x in (env_vals.get("REDDIT_SUBREDDITS") or "").split(",") if x.strip()]
+    reddit_subs = [
+        x.strip()
+        for x in (env_vals.get("REDDIT_SUBREDDITS") or "").split(",")
+        if x.strip()
+    ]
 
     tasks.append(asyncio.create_task(run_telegram()))
     if rss_feeds:
-        tasks.append(asyncio.create_task(rss_poller(rss_feeds, cfg, translator, pub, db)))
+        tasks.append(
+            asyncio.create_task(
+                rss_poller(rss_feeds, cfg, translator, pub, db)
+            )
+        )
     if ru_channels:
-        tasks.append(asyncio.create_task(ru_source_poller(ru_channels, cfg, pub, db)))
+        tasks.append(
+            asyncio.create_task(ru_source_poller(ru_channels, cfg, pub, db))
+        )
     if reddit_subs:
-        tasks.append(asyncio.create_task(reddit_poller(reddit_subs, cfg, translator, pub, db)))
+        tasks.append(
+            asyncio.create_task(
+                reddit_poller(reddit_subs, cfg, translator, pub, db)
+            )
+        )
 
-    print(f"[RE:POST] === RE:POST ===")
+    print("[RE:POST] === RE:POST ===")
     print(f"[RE:POST] Target: {cfg['TARGET_CHANNEL']}")
-    print(f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS + {len(ru_channels)} RU + {len(reddit_subs)} Reddit")
-    print(f"[RE:POST] Running...")
+    print(
+        f"[RE:POST] Donors: {len(cfg['SOURCE_CHANNELS'])} Telegram + {len(rss_feeds)} RSS + {len(ru_channels)} RU + {len(reddit_subs)} Reddit"
+    )
+    print("[RE:POST] Running...")
 
-    await asyncio.gather(*tasks)
+    try:
+        await asyncio.gather(*tasks)
+    except Exception as e:
+        print(f"[RE:POST] Fatal error in main loop: {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
@@ -900,7 +1012,11 @@ if __name__ == "__main__":
     if "--auth" in sys.argv:
         code = None
         for i, a in enumerate(sys.argv):
-            if a == "--auth" and i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("-"):
+            if (
+                a == "--auth"
+                and i + 1 < len(sys.argv)
+                and not sys.argv[i + 1].startswith("-")
+            ):
                 code = sys.argv[i + 1]
                 break
         asyncio.run(auth_once(env_path, code))

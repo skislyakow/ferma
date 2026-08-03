@@ -7,6 +7,9 @@ import random
 import asyncio
 import tempfile
 import traceback
+import feedparser
+import requests
+from dotenv import dotenv_values
 from html import unescape
 
 
@@ -32,8 +35,6 @@ def save_published(posted, tracker_path):
 
 
 def translate_text(text, api_key, folder_id, name="VK"):
-    import requests
-
     if not text or not api_key:
         return text
     try:
@@ -69,16 +70,13 @@ def detect_video(entry):
 
 
 def fetch_entries(subreddit, name="VK"):
-    import feedparser
-    import requests as _req
-
     url = f"https://www.reddit.com/r/{subreddit}/new/.rss"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     for attempt in range(3):
         try:
-            r = _req.get(url, headers=headers, timeout=15)
+            r = requests.get(url, headers=headers, timeout=15)
             if r.status_code != 200:
                 print(
                     f"[{name}] RSS returned {r.status_code} (attempt {attempt + 1}/3)"
@@ -146,8 +144,6 @@ def extract_image_urls(entry: dict) -> list[str]:
 
 
 def fetch_reddit_images(post_url: str, name: str = "VK") -> list[str]:
-    import requests
-
     try:
         old_url = post_url.replace("www.reddit.com", "old.reddit.com")
         json_url = old_url.rstrip("/") + ".json"
@@ -204,8 +200,6 @@ def fetch_reddit_images(post_url: str, name: str = "VK") -> list[str]:
 
 
 def download_image(url, filename, media_dir, name="VK"):
-    import requests
-
     try:
         ext = url.rsplit(".", 1)[-1].split("?")[0] or "jpg"
         if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
@@ -226,58 +220,14 @@ def download_image(url, filename, media_dir, name="VK"):
         return None
 
 
-def _extract_frame(video_path, filename, media_dir):
-    import subprocess
-
-    frame_path = os.path.join(media_dir, f"{filename}_frame.jpg")
-    try:
-        result = subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-ss", "00:00:01",
-                "-vframes", "1",
-                "-q:v", "2",
-                frame_path,
-            ],
-            capture_output=True,
-            timeout=30,
-        )
-        if result.returncode == 0 and os.path.exists(frame_path) and os.path.getsize(frame_path) > 1000:
-            return frame_path
-        result = subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-vframes", "1",
-                "-q:v", "2",
-                frame_path,
-            ],
-            capture_output=True,
-            timeout=30,
-        )
-        if result.returncode == 0 and os.path.exists(frame_path) and os.path.getsize(frame_path) > 1000:
-            return frame_path
-    except Exception as e:
-        print(f"[frame] Extract failed: {e}")
-    if os.path.exists(frame_path):
-        try:
-            os.remove(frame_path)
-        except OSError:
-            pass
-    return None
-
-
 def download_reddit_video(video_url, filename, media_dir, name="VK"):
-    import requests as _req
-
     video_file = None
     audio_file = None
     merged = None
     try:
         video_id = video_url.rstrip("/").split("/")[-1]
         manifest_url = f"https://v.redd.it/{video_id}/DASHPlaylist.mpd"
-        r = _req.get(
+        r = requests.get(
             manifest_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15
         )
         if r.status_code != 200:
@@ -315,7 +265,7 @@ def download_reddit_video(video_url, filename, media_dir, name="VK"):
         merged = os.path.join(media_dir, f"{filename}.mp4")
 
         url = f"https://v.redd.it/{video_id}/{video_base}"
-        vr = _req.get(
+        vr = requests.get(
             url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, stream=True
         )
         vr.raise_for_status()
@@ -326,7 +276,7 @@ def download_reddit_video(video_url, filename, media_dir, name="VK"):
 
         if audio_base:
             url = f"https://v.redd.it/{video_id}/{audio_base}"
-            ar = _req.get(
+            ar = requests.get(
                 url,
                 headers={"User-Agent": "Mozilla/5.0"},
                 timeout=30,
@@ -478,18 +428,7 @@ async def process_entry(
         cleanup_files = [media_path]
         if media_path:
             if media_type == "video":
-                try:
-                    attachment = vk.upload_video(media_path, title=title[:100])
-                except Exception as ve:
-                    print(f"[{name}] Video upload failed: {ve}, extracting frame...")
-                    frame_path = _extract_frame(media_path, media_prefix + pid, media_dir)
-                    if frame_path:
-                        media_path = frame_path
-                        media_type = "photo"
-                        attachment = vk.upload_photo(frame_path)
-                        cleanup_files.append(frame_path)
-                    else:
-                        raise ve
+                attachment = vk.upload_video(media_path, title=title[:100])
             else:
                 attachment = vk.upload_photo(media_path)
         vk.post_to_wall(message=post_text, attachment=attachment)
@@ -529,7 +468,6 @@ async def run_cycle(
     interval_default=600,
 ):
     env_path = os.path.abspath(env_path)
-    from dotenv import dotenv_values
     from core.crosspost.vk_poster import VKPoster
 
     env = dotenv_values(env_path)
