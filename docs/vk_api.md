@@ -29,6 +29,16 @@ https://oauth.vk.com/authorize?client_id={APP_ID}&display=page&redirect_uri=http
 
 ### Как получить User Token
 
+> **Проверенный способ (03.08.2026)** — рабочий Standalone app: `client_id=6222115` (scope `wall,photos,video,groups,offline`). Открыть в браузере и скопировать `access_token` из фрагмента URL:
+> ```
+> https://oauth.vk.com/authorize?client_id=6222115&scope=wall,photos,video,groups,offline&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.131&display=page
+> ```
+> После авторизации браузер редиректит на `https://oauth.vk.com/blank.html#access_token=vk1.a.xxx...&expires_in=0&user_id=...` — токен берётся из фрагмента (после `#`), **НЕ** из query-string.
+>
+> ⚠ `expires_in=0` при наличии `offline` scope = токен бессрочный. Этот токен — **user token**: даёт `photos.getWallUploadServer`, `photos.saveWallPhoto`, `video.save`, `wall.post` (полный доступ, в отличие от community token). После получения: обновить `VK_TOKEN=` в `channels/*/.env` (5 каналов, локально + на VPS) и перезапустить screen-ы.
+>
+> 🚫 **Не использовать python273/vk_api для логина** — VK стабильно выдаёт капчу (app_id=7934655), путь заведомо тупиковый. Только OAuth через браузер.
+
 1. Создать приложение: https://vk.com/apps?act=manage → **Создать приложение**
    - **Название**: любое (например "Ferma")
    - **Тип**: **Standalone** (критически важно! Не Web и не Community)
@@ -851,9 +861,10 @@ wall.post({owner_id, attachments: "video{owner}_{id}_{access_key}", from_group: 
    - Тип: **Standalone** (критически важно!)
    - После создания → скопировать ID приложения
 
-3. **Получить токен**: открыть в браузере ССЫЛКУ ВЫШЕ (с подставленным app_id)
+3. **Получить токен**: открыть в браузере ССЫЛКУ ВЫШЕ (с подставленным app_id; рабочий — `6222115`)
    - Разрешить запрашиваемые права
-   - Скопировать токен из адресной строки
+   - Скопировать токен из адресной строки (фрагмент после `#access_token=`)
+   - Если редиректит на `oauth.vk.com/blank.html` с пустой страницей — токен уже в URL-баре, просто скопируй его
 
 4. **Добавить аккаунт в администраторы группы**:
    - VK → Управление сообществом → Участники → Руководители
