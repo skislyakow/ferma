@@ -132,10 +132,14 @@ def _crosspost_to_vk(
 
 
 def _vk_prepare_copy(media_path, cfg):
-    if cfg.get("VK_TOKEN") and media_path:
+    if cfg.get("VK_TOKEN") and media_path and os.path.exists(media_path):
         cp = media_path + ".vktmp"
-        shutil.copy2(media_path, cp)
-        return cp
+        try:
+            shutil.copy2(media_path, cp)
+            return cp
+        except OSError as e:
+            print(f"[VK] Copy failed: {e}")
+            return None
     return None
 
 
@@ -467,7 +471,7 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
     if not ru_channels:
         return
 
-    parser = WebParser(db)
+    parser = WebParser(db, media_dir=MEDIA_DIR)
     print(f"[RU] Monitoring {len(ru_channels)} Russian channels...")
 
     while True:
@@ -536,6 +540,10 @@ async def ru_source_poller(ru_channels, cfg, pub, db):
 
             # Use fallback image if no media
             m_path, m_type = media_path, media_type or "photo"
+            if m_path and not os.path.exists(m_path):
+                print(f"[RU] Media missing for {post_id}, posting text-only")
+                m_path = None
+                m_type = "photo"
             vk_copy = _vk_prepare_copy(m_path, cfg)
             if not m_path:
                 m_path = None

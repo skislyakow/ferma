@@ -8,8 +8,9 @@ from core.db.database import Database
 
 
 class WebParser:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, media_dir: str | None = None):
         self.db = db
+        self.media_dir = media_dir or os.path.abspath("media")
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -17,7 +18,7 @@ class WebParser:
                 "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
             }
         )
-        os.makedirs("media", exist_ok=True)
+        os.makedirs(self.media_dir, exist_ok=True)
 
     def _extract_video_url(self, block: str) -> str | None:
         match = re.search(r'data-video="([^"]+)"', block)
@@ -30,7 +31,7 @@ class WebParser:
 
     def _download_video(self, url: str, msg_id: int) -> str | None:
         try:
-            path = f"media/vid_{msg_id}.mp4"
+            path = os.path.join(self.media_dir, f"vid_{msg_id}.mp4")
             r = self.session.get(url, timeout=120, stream=True)
             r.raise_for_status()
             total = 0
@@ -68,7 +69,7 @@ class WebParser:
             ext = url.split(".")[-1].split("?")[0][:5]
             if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
                 ext = "jpg"
-            path = f"media/img_{msg_id}.{ext}"
+            path = os.path.join(self.media_dir, f"img_{msg_id}.{ext}")
             r = self.session.get(url, timeout=15)
             r.raise_for_status()
             with open(path, "wb") as f:
