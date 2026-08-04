@@ -71,6 +71,9 @@ class Publisher:
 
         try:
             if not media_path:
+                if len(text) > 4096:
+                    print("[Publisher] Text too long, truncating to 4096")
+                    text = text[:4093] + "..."
                 payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
                 if parse_mode:
                     payload["parse_mode"] = parse_mode
